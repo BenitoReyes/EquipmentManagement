@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QFormLayout
+from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QFormLayout, QMessageBox
 import db
 
 class EditStudentDialog(QDialog):
@@ -6,13 +6,13 @@ class EditStudentDialog(QDialog):
         super().__init__()
 
         self.setWindowTitle("Edit Student Details")
-        self.student_id = student_data[2]  # Assuming ID is at index 2
+        self.student_id = student_data[0]  # Assuming ID is at index 0
 
         layout = QFormLayout()
         self.inputs = {}
 
         fields = [
-            ("First Name", 0), ("Last Name", 1), ("Section", 3), ("Phone", 4), ("Email", 5),
+            ("First Name", 1), ("Last Name", 2), ("Section", 3), ("Phone", 4), ("Email", 5),
             ("Shako #", 6), ("Hanger #", 7), ("Garment Bag", 8), ("Coat #", 9), ("Pants #", 10),
             ("Spats Size", 11), ("Gloves Size", 12), ("Guardian Name", 13), ("Guardian Phone", 14)
         ]
@@ -30,8 +30,19 @@ class EditStudentDialog(QDialog):
 
     def update_student(self):
         """Step 4: Save updated details."""
-        for field, index in self.inputs.items():
-            db.update_student(self.student_id, field.lower().replace(" ", "_"), index.text().strip())
+        FIELD_MAPPING = {
+        "Shako #": "shako_num",
+        "Hanger #": "hanger_num",
+        "Garment Bag": "garment_bag",
+        "Coat #": "coat_num",
+        "Pants #": "pants_num",
+        "Spats Size": "spats_size",
+        "Gloves Size": "gloves_size",
+        "Guardian Name": "guardian_name",
+        "Guardian Phone": "guardian_phone"
+        }
 
+        for field, input_widget in self.inputs.items():
+            db.update_student(self.student_id, FIELD_MAPPING.get(field, field.lower().replace(" ", "_")), input_widget.text().strip())
         QMessageBox.information(self, "Success", "Student details updated!")
         self.accept()

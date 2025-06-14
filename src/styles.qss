@@ -4,6 +4,7 @@ QWidget {
     font-size: 14px;
     font-family: 'Arial', sans-serif;
 }
+
 QPushButton {
     background-color: #3a6ea5;
     color: white;
@@ -12,17 +13,38 @@ QPushButton {
     padding: 10px;
     font-size: 16px;
 }
+
 QPushButton:hover {
     background-color: #2a5e94;
 }
+
+QScrollBar::handle:horizontal {
+    background: #808080; /* Light grey scrollbar */
+    min-width: 20px;
+    border-radius: 5px;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: #2b2b2b; /* Matches non-scroll area */
+}
+
 QTableWidget {
     background-color: #1e1e1e;
     border: 1px solid #444;
     gridline-color: #444;
-}
+} 
+
+QTableCornerButton::section {
+    background-color: #313131;  /* Matches table background */
+    border: none;
+} 
+
+
 QHeaderView::section {
     background-color: #3a6ea5;
     color: white;
+    padding: 6px;  /* Extra space to prevent cutoff */
+    font-size: 12px;
     font-weight: bold;
-    padding: 6px;
 }
+

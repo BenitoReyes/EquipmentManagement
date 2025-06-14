@@ -16,11 +16,11 @@ def create_tables():
         first_name TEXT,
         last_name TEXT,
         section TEXT,
-        phone TEXT,
+        phone INTEGER,
         email TEXT,
         shako_num INTEGER,
         hanger_num INTEGER,
-        garment_bag INTEGER,
+        garment_bag TEXT,
         coat_num INTEGER,
         pants_num INTEGER,
         spats_size TEXT,
@@ -64,20 +64,33 @@ def get_student_by_id(student_id):
     student = cursor.fetchone()
     conn.close()
     return student
-
+def get_student_by_name(first_name, last_name):
+    """Retrieve a single student's details by name."""
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM students WHERE first_name = ? AND last_name = ?", (first_name, last_name))
+    student = cursor.fetchone()
+    conn.close()
+    return student
 def update_student(student_id, field, new_value):
-    """Update a student's record only if they exist."""
+    """Update a student's record safely."""
     conn, cursor = connect_db()
 
-    cursor.execute("SELECT * FROM students WHERE student_id = ?", (student_id,))
-    if cursor.fetchone() is None:
-        print("Error: Student ID not found.")
+    valid_fields = {
+        "first_name", "last_name", "section", "phone", "email",
+        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
+        "spats_size", "gloves_size", "guardian_name", "guardian_phone"
+    }
+
+    # Ensure field is valid before running query
+    if field not in valid_fields:
+        print(f"Error: Invalid field '{field}'")
         return
 
-    cursor.execute(f"UPDATE students SET {field} = ? WHERE student_id = ?", (new_value, student_id))
+    query = f"UPDATE students SET {field} = ? WHERE student_id = ?"
+    cursor.execute(query, (new_value, student_id))
+
     conn.commit()
     conn.close()
-
 
 
 def delete_student(student_id):

@@ -16,7 +16,6 @@ class EquipmentManagementUI(QWidget):
         self.setWindowTitle("Equipment Management")
         self.setGeometry(200, 200, 900, 700)
         self.setStyleSheet(load_stylesheet())
-
         layout = QVBoxLayout()
 
         self.title_label = QLabel("Equipment Management System")
@@ -57,18 +56,26 @@ class EquipmentManagementUI(QWidget):
 
 
     def update_student(self):
+
         """Step 1: Ask user for Student ID before updating."""
-        student_id, ok = QInputDialog.getText(self, "Update Student", "Enter Student ID:")
+        student_id, ok = QInputDialog.getText(self, "Update Student", "Enter Student ID: \n(Or leave empty to search by name):")
         if not ok or not student_id.strip():
-            QMessageBox.warning(self, "Error", "Student ID is required!")
-            return
-
-        # Step 2: Fetch student details
-        student_data = db.get_student_by_id(student_id.strip())
-        if not student_data:
-            QMessageBox.warning(self, "Error", "No student found with that ID.")
-            return
-
+            QMessageBox.information(self,"Message","Student ID left empty moving to search by name")
+            # Step 2: Ask for First and Last Name if ID is empty
+            first_name, ok_first = QInputDialog.getText(self, "Update Student", "Enter First Name")
+            last_name, ok_last = QInputDialog.getText(self, "Update Student", "Enter Last Name ") 
+            if not (ok_first and ok_last) or not (first_name.strip() and last_name.strip()):
+                QMessageBox.warning(self, "Error", "First and Last Name are required!")
+                return
+            student_data = db.get_student_by_name(first_name.strip(), last_name.strip())
+            if not student_data:
+                QMessageBox.warning(self, "Error", "No student found with that name.")
+                return
+        else:
+            student_data = db.get_student_by_id(student_id.strip())
+            if not student_data:
+                QMessageBox.warning(self, "Error", "No student found with that ID.")
+                return
         # Step 3: Open edit popup with student data
         dialog = EditStudentDialog(student_data)
         if dialog.exec():  # If user confirms update
