@@ -1,4 +1,7 @@
-from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox,QInputDialog
+from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox,QInputDialog, QToolButton, QMenu, QHBoxLayout
+from PyQt6.QtGui import QAction
+
+
 from add_student_dialog import AddStudentDialog  # Import popup dialog
 import db  # Database functions
 from edit_student_dialog import EditStudentDialog
@@ -21,16 +24,37 @@ class EquipmentManagementUI(QWidget):
         self.title_label = QLabel("Equipment Management System")
         layout.addWidget(self.title_label)
 
-        # Add Student Button
-        self.add_button = QPushButton("Add Student")
-        self.add_button.clicked.connect(self.open_add_student_popup)
-        layout.addWidget(self.add_button)
-        self.update_button = QPushButton("Update Student")
-        self.update_button.clicked.connect(self.update_student)
-        layout.addWidget(self.update_button)
-        self.delete_button = QPushButton("Delete Student")
-        self.delete_button.clicked.connect(self.delete_student)
-        layout.addWidget(self.delete_button)
+        # --- Centered Button Layout ---
+        button_layout = QHBoxLayout()
+        button_layout.addStretch(1)
+
+        # Student Operations Menu
+        student_menu = QMenu()
+        student_menu.addAction("Add Student", self.open_add_student_popup)
+        student_menu.addAction("Update Student", self.update_student)
+        student_menu.addAction("Delete Student", self.delete_student)
+
+        student_ops = QToolButton()
+        student_ops.setText("Student Operations")
+        student_ops.setMenu(student_menu)
+        student_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button_layout.addWidget(student_ops)
+
+        # Uniform Operations Menu
+        uniform_menu = QMenu()
+        uniform_menu.addAction("Assign Uniform", self.assign_uniform_popup)
+        uniform_menu.addAction("Return Uniform", self.return_uniform_popup)
+        uniform_menu.addAction("View Outstanding", self.show_outstanding_uniforms)
+
+        uniform_ops = QToolButton()
+        uniform_ops.setText("Uniform Operations")
+        uniform_ops.setMenu(uniform_menu)
+        uniform_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button_layout.addWidget(uniform_ops)
+
+        button_layout.addStretch(1)
+        layout.addLayout(button_layout)
+        # --- End Centered Button Layout ---
 
         # Student Records Table
         self.student_table = QTableWidget()
@@ -113,12 +137,57 @@ class EquipmentManagementUI(QWidget):
 
 
     def refresh_table(self):
-            """Loads student data into the table and removes stale records."""
-            self.student_table.setRowCount(0)  # Clear the table
+        """Refresh the student table with up-to-date uniform assignments."""
+        self.student_table.setRowCount(0)
+        students = db.get_students_with_uniforms()
+        for row_idx, student in enumerate(students):
+            self.student_table.insertRow(row_idx)
+            for col_idx, value in enumerate(student):
+                display_value = "" if value is None else str(value)
+                self.student_table.setItem(row_idx, col_idx, QTableWidgetItem(display_value))
 
-            students = db.get_students()
-            self.student_table.setRowCount(len(students))
+    def assign_uniform_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Assign Uniform", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
 
-            for row_idx, student in enumerate(students):
-                for col_idx, value in enumerate(student):
-                    self.student_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        # Get all uniform fields
+        shako_num, ok1 = QInputDialog.getInt(self, "Assign Uniform", "Enter Shako Number:")
+        if not ok1:
+            return
+        hanger_num, ok2 = QInputDialog.getInt(self, "Assign Uniform", "Enter Hanger Number:")
+        if not ok2:
+            return
+        garment_bag, ok3 = QInputDialog.getText(self, "Assign Uniform", "Enter Garment Bag (Y/N):")
+        if not ok3 or not garment_bag.strip():
+            return
+        coat_num, ok4 = QInputDialog.getInt(self, "Assign Uniform", "Enter Coat Number:")
+        if not ok4:
+            return
+        pants_num, ok5 = QInputDialog.getInt(self, "Assign Uniform", "Enter Pants Number:")
+        if not ok5:
+            return
+
+        # Assign uniform with all fields
+        db.assign_uniform(student_id.strip(), shako_num, hanger_num, garment_bag.strip(), coat_num, pants_num)
+        QMessageBox.information(self, "Success", "Uniform assigned!")
+        self.refresh_table()
+
+    def return_uniform_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Return Uniform", "Enter Student ID:")
+        if ok and student_id.strip():
+            db.return_uniform(student_id.strip())
+            QMessageBox.information(self, "Success", "Uniform marked as returned.")
+            self.refresh_table()
+
+    def show_outstanding_uniforms(self):
+        outstanding = db.get_students_with_outstanding_uniforms()
+        if not outstanding:
+            QMessageBox.information(self, "Info", "All uniforms are accounted for.")
+        else:
+            # Unpack all columns: first, last, shako, hanger, garment, coat, pants
+            message = "\n".join([
+                f"{row[0]} {row[1]}: Shako: {row[2]}, Hanger: {row[3]}, Garment: {row[4]}, Coat: {row[5]}, Pants: {row[6]}"
+                for row in outstanding
+            ])
+            QMessageBox.information(self, "Outstanding Uniforms", message)

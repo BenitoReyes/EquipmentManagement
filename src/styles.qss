@@ -17,6 +17,23 @@ QPushButton {
 QPushButton:hover {
     background-color: #2a5e94;
 }
+QToolButton {
+    background-color: #3a6ea5;  /* Bright blue */
+    color: white;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+    font-size: 14px;
+    qproperty-iconAlignment: AlignCenter;
+}
+
+QToolButton::menu-indicator {
+    image: none;
+}
+
+QToolButton::hover {
+    background-color: #2a5e94;  /* Darker blue on hover */
+}
 
 QScrollBar::handle:horizontal {
     background: #808080; /* Light grey scrollbar */
