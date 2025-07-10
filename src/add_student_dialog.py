@@ -12,12 +12,17 @@ class AddStudentDialog(QDialog):
         self.inputs = {}
 
         fields = ["Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
-                  "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #", "Spats Size",
-                  "Gloves Size", "Guardian Name", "Guardian Phone"]
+                  "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #", 
+                  "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone", 
+                  "Instrument Name", "Instrument Serial", "Instrument Case"]
 
         for field in fields:
-            self.inputs[field] = QLineEdit()
-            layout.addRow(QLabel(field + ":"), self.inputs[field])
+            if isinstance(field, tuple):
+                # For instrument fields, add a label without a corresponding input field
+                layout.addRow(QLabel(field[0] + ":"))
+            else:
+                self.inputs[field] = QLineEdit()
+                layout.addRow(QLabel(field + ":"), self.inputs[field])
 
         self.submit_button = QPushButton("Submit")
         self.submit_button.clicked.connect(self.add_student)
@@ -29,7 +34,28 @@ class AddStudentDialog(QDialog):
         """Handles adding a student to the database."""
         values = [self.inputs[field].text().strip() for field in self.inputs]
 
-        if not values[0] or not values[1] or not values[2]:  # Ensure required fields are filled
+        student_id = values[0]
+        first_name = values[1]
+        last_name = values[2]
+        phone = values[4]
+        guardian_phone = values[13]  # Adjust index if needed
+
+        # Validate Student ID
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+
+        # Validate Phone Number
+        if not phone.isdigit() or len(phone) != 10:
+            QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits.")
+            return
+
+        # Validate Guardian Phone Number
+        if not guardian_phone.isdigit() or len(guardian_phone) != 10:
+            QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits.")
+            return
+
+        if not first_name or not last_name or not student_id:
             QMessageBox.warning(self, "Error", "First Name, Last Name, and Student ID are required!")
             return
 

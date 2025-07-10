@@ -5,46 +5,6 @@ QWidget {
     font-family: 'Arial', sans-serif;
 }
 
-QPushButton {
-    background-color: #3a6ea5;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 10px;
-    font-size: 16px;
-}
-
-QPushButton:hover {
-    background-color: #2a5e94;
-}
-QToolButton {
-    background-color: #3a6ea5;  /* Bright blue */
-    color: white;
-    border-radius: 5px;
-    padding: 6px 12px;
-    font-weight: bold;
-    font-size: 14px;
-    qproperty-iconAlignment: AlignCenter;
-}
-
-QToolButton::menu-indicator {
-    image: none;
-}
-
-QToolButton::hover {
-    background-color: #2a5e94;  /* Darker blue on hover */
-}
-
-QScrollBar::handle:horizontal {
-    background: #808080; /* Light grey scrollbar */
-    min-width: 20px;
-    border-radius: 5px;
-}
-
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-    background: #2b2b2b; /* Matches non-scroll area */
-}
-
 QTableWidget {
     background-color: #1e1e1e;
     border: 1px solid #444;
@@ -54,8 +14,52 @@ QTableWidget {
 QTableCornerButton::section {
     background-color: #313131;  /* Matches table background */
     border: none;
-} 
+}
 
+QPushButton {
+    background-color: #3a6ea5;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 16px;
+}
+QPushButton:hover {
+    background-color: #2a5e94;
+}
+QPushButton#deleteAllButton {
+    background-color: #b22222;
+    color: white;
+    font-weight: bold;
+}
+QPushButton#deleteAllButton:hover {
+    background-color: #d32f2f;
+}
+
+QToolButton {
+    background-color: #3a6ea5;  /* Bright blue */
+    color: white;
+    border-radius: 6px;
+    padding: 10px;
+    font-weight: bold;
+    font-size: 14px;
+    qproperty-iconAlignment: AlignCenter;
+}
+QToolButton::menu-indicator {
+    image: none;
+}
+QToolButton::hover {
+    background-color: #2a5e94;  /* Darker blue on hover */
+}
+
+QScrollBar::handle:horizontal {
+    background: #808080; /* Light grey scrollbar */
+    min-width: 20px;
+    border-radius: 5px;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: #2b2b2b; /* Matches non-scroll area */
+}
 
 QHeaderView::section {
     background-color: #3a6ea5;
