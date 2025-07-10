@@ -38,7 +38,7 @@ class AddStudentDialog(QDialog):
         first_name = values[1]
         last_name = values[2]
         phone = values[4]
-        guardian_phone = values[13]  # Adjust index if needed
+        guardian_phone = values[14] 
 
         # Validate Student ID
         if not student_id.isdigit() or len(student_id) != 9:
