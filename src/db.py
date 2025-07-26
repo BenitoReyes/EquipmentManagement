@@ -8,9 +8,7 @@ def connect_db():
     cursor = conn.cursor()
     return conn, cursor
 def create_tables():
-    """Create the students table with student_id as the primary key."""
     conn, cursor = connect_db()
-
     cursor.execute('''CREATE TABLE IF NOT EXISTS students (
         student_id TEXT PRIMARY KEY,
         first_name TEXT,
@@ -29,22 +27,22 @@ def create_tables():
         guardian_phone TEXT,
         instrument_name TEXT,
         instrument_serial TEXT,
-        instrument_case TEXT
+        instrument_case TEXT,
+        year_came_up TEXT
     )''')
-
     conn.commit()
     conn.close()
 
 def add_student(student_id, first_name, last_name, section, phone, email, shako_num, hanger_num,
                 garment_bag, coat_num, pants_num, spats_size, gloves_size, guardian_name, guardian_phone,
-                instrument_name, instrument_serial, instrument_case):
+                instrument_name, instrument_serial, instrument_case, year_came_up):
     conn, cursor = connect_db()
     cursor.execute('''
         INSERT INTO students (student_id, first_name, last_name, section, phone, email,
                               shako_num, hanger_num, garment_bag, coat_num, pants_num,
                               spats_size, gloves_size, guardian_name, guardian_phone,
-                              instrument_name, instrument_serial, instrument_case)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              instrument_name, instrument_serial, instrument_case, year_came_up)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         student_id, first_name, last_name, section, phone, email,
         shako_num if shako_num not in ("", None) else None,
@@ -55,7 +53,8 @@ def add_student(student_id, first_name, last_name, section, phone, email, shako_
         spats_size, gloves_size, guardian_name, guardian_phone,
         instrument_name if instrument_name not in ("", None) else None,
         instrument_serial if instrument_serial not in ("", None) else None,
-        instrument_case if instrument_case not in ("", None) else None
+        instrument_case if instrument_case not in ("", None) else None,
+        year_came_up if year_came_up not in ("", None) else None
     ))
     # If any uniform field is filled, add to uniforms table as "not returned"
     if any(x not in ("", None) for x in [shako_num, hanger_num, garment_bag, coat_num, pants_num]):
@@ -128,7 +127,7 @@ def get_students_with_uniforms_and_instruments():
     conn, cursor = connect_db()
     cursor.execute('''
         SELECT
-            s.student_id, s.first_name, s.last_name, s.section, s.phone, s.email,
+            s.student_id, s.last_name, s.first_name, s.section, s.phone, s.email,
             COALESCE(u.shako_num, s.shako_num) as shako_num,
             COALESCE(u.hanger_num, s.hanger_num) as hanger_num,
             COALESCE(u.garment_bag, s.garment_bag) as garment_bag,
@@ -137,7 +136,8 @@ def get_students_with_uniforms_and_instruments():
             s.spats_size, s.gloves_size, s.guardian_name, s.guardian_phone,
             COALESCE(i.instrument_name, s.instrument_name) as instrument_name,
             COALESCE(i.instrument_serial, s.instrument_serial) as instrument_serial,
-            COALESCE(i.instrument_case, s.instrument_case) as instrument_case
+            COALESCE(i.instrument_case, s.instrument_case) as instrument_case,
+            s.year_came_up
         FROM students s
         LEFT JOIN (
             SELECT uu.student_id, uu.shako_num, uu.hanger_num, uu.garment_bag, uu.coat_num, uu.pants_num
@@ -192,7 +192,8 @@ def update_student(student_id, field, new_value):
     valid_fields = {
         "first_name", "last_name", "section", "phone", "email",
         "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
-        "spats_size", "gloves_size", "guardian_name", "guardian_phone"
+        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
+        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
     }
 
     # Ensure field is valid before running query
@@ -346,3 +347,27 @@ def delete_all_students():
     cursor.execute("DELETE FROM instruments")
     conn.commit()
     conn.close()
+
+def get_all_uniforms():
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM uniforms")
+    data = cursor.fetchall()
+    conn.close()
+    return data
+
+def get_all_instruments():
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM instruments")
+    data = cursor.fetchall()
+    conn.close()
+    return data
+
+def add_student_from_inputs(inputs):
+    fields = [
+        "student_id", "first_name", "last_name", "section", "phone", "email",
+        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
+        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
+        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
+    ]
+    values = [inputs[field].text().strip() for field in fields]
+    add_student(*values)

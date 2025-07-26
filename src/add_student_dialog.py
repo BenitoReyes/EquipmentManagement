@@ -11,10 +11,12 @@ class AddStudentDialog(QDialog):
         layout = QFormLayout()
         self.inputs = {}
 
-        fields = ["Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
-                  "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #", 
-                  "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone", 
-                  "Instrument Name", "Instrument Serial", "Instrument Case"]
+        fields = [
+            "Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
+            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+            "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
+            "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came up"
+        ]
 
         for field in fields:
             if isinstance(field, tuple):

@@ -11,12 +11,13 @@ class EditStudentDialog(QDialog):
         layout = QFormLayout()
         self.inputs = {}
 
-        # Updated fields list with instrument fields
+        # Updated fields list with instrument fields and Year Came up
         fields = [
             ("First Name", 1), ("Last Name", 2), ("Section", 3), ("Phone", 4), ("Email", 5),
             ("Shako #", 6), ("Hanger #", 7), ("Garment Bag", 8), ("Coat #", 9), ("Pants #", 10),
             ("Spats Size", 11), ("Gloves Size", 12), ("Guardian Name", 13), ("Guardian Phone", 14),
-            ("Instrument Name", 15), ("Instrument Serial", 16), ("Instrument Case", 17)
+            ("Instrument Name", 15), ("Instrument Serial", 16), ("Instrument Case", 17),
+            ("Year Came up", 18)
         ]
 
         for field_name, index in fields:
@@ -49,7 +50,8 @@ class EditStudentDialog(QDialog):
             "Guardian Phone": "guardian_phone",
             "Instrument Name": "instrument_name",
             "Instrument Serial": "instrument_serial",
-            "Instrument Case": "instrument_case"
+            "Instrument Case": "instrument_case",
+            "Year Came up": "year_came_up"
         }
 
         # Validate Student ID (self.student_id)
