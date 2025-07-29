@@ -1,6 +1,14 @@
 from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox,QInputDialog, QToolButton, QMenu, QHBoxLayout, QDialog, QListWidget, QFileDialog
-from PyQt6.QtGui import QAction
-
+from PyQt6.QtGui import QAction, QPixmap, QImage, QPainter
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QTextEdit
+from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+import qrcode
+import barcode
+from barcode.writer import ImageWriter
+from PIL import Image
+import io
+import csv
 
 from add_student_dialog import AddStudentDialog  # Import popup dialog
 import db  # Database functions
@@ -34,6 +42,8 @@ class EquipmentManagementUI(QWidget):
         student_menu.addAction("Update Student", self.update_student)
         student_menu.addAction("Delete Student", self.delete_student)
         student_menu.addAction("Find Student", self.find_student_popup)
+        student_menu.addAction("Student to Bar/QR code", self.student_to_code_popup)
+        student_menu.addAction("Import Students from CSV", self.import_students_from_csv)
 
         student_ops = QToolButton()
         student_ops.setText("Student Operations")
@@ -41,46 +51,34 @@ class EquipmentManagementUI(QWidget):
         student_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button_layout.addWidget(student_ops)
 
-        # Uniform Operations Menu
-        uniform_menu = QMenu()
-        uniform_menu.addAction("Assign Uniform", self.assign_uniform_popup)
-        uniform_menu.addAction("Return Uniform", self.return_uniform_popup)
-        uniform_menu.addAction("View Outstanding", self.show_outstanding_uniforms)
+        # Equipment Operations Menu
+        equipment_menu = QMenu()
+        equipment_menu.addAction("Assign Uniform", self.assign_uniform_popup)
+        equipment_menu.addAction("Return Uniform", self.return_uniform_popup)
+        equipment_menu.addAction("View Outstanding Uniforms", self.show_outstanding_uniforms)
+        equipment_menu.addSeparator()
+        equipment_menu.addAction("Assign Instrument", self.assign_instrument_popup)
+        equipment_menu.addAction("Return Instrument", self.return_instrument_popup)
+        equipment_menu.addAction("View Outstanding Instruments", self.show_outstanding_instruments)
 
-        uniform_ops = QToolButton()
-        uniform_ops.setText("Uniform Operations")
-        uniform_ops.setMenu(uniform_menu)
-        uniform_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        button_layout.addWidget(uniform_ops)
-
-        # Instrument Operations Menu
-        instrument_menu = QMenu()
-        instrument_menu.addAction("Assign Instrument", self.assign_instrument_popup)
-        instrument_menu.addAction("Return Instrument", self.return_instrument_popup)
-        instrument_menu.addAction("View Outstanding Instruments", self.show_outstanding_instruments)
-
-        instrument_ops = QToolButton()
-        instrument_ops.setText("Instrument Operations")
-        instrument_ops.setMenu(instrument_menu)
-        instrument_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        button_layout.addWidget(instrument_ops)
+        equipment_ops = QToolButton()
+        equipment_ops.setText("Equipment Operations")
+        equipment_ops.setMenu(equipment_menu)
+        equipment_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button_layout.addWidget(equipment_ops)
         
-        # Add Delete All Students button
-        delete_all_button = QPushButton("Delete ALL Students")
-        delete_all_button.setObjectName("deleteAllButton")
-        delete_all_button.clicked.connect(self.delete_all_students)
-        button_layout.addWidget(delete_all_button)
+        # Administrative Operations Menu
+        admin_menu = QMenu()
+        admin_menu.addAction("Delete ALL Students", self.delete_all_students)
+        admin_menu.addSeparator()
+        admin_menu.addAction("Create Backup", self.create_backup)
+        admin_menu.addAction("Use Backup", self.use_backup)
 
-        # Backup/Restore Menu
-        backup_menu = QMenu()
-        backup_menu.addAction("Create Backup", self.create_backup)
-        backup_menu.addAction("Use Backup", self.use_backup)
-
-        backup_ops = QToolButton()
-        backup_ops.setText("Backup/Restore")
-        backup_ops.setMenu(backup_menu)
-        backup_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        button_layout.addWidget(backup_ops)
+        admin_ops = QToolButton()
+        admin_ops.setText("Administrative Operations")
+        admin_ops.setMenu(admin_menu)
+        admin_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button_layout.addWidget(admin_ops)
 
         button_layout.addStretch(1)
         layout.addLayout(button_layout)       
@@ -209,7 +207,7 @@ class EquipmentManagementUI(QWidget):
         if not student_data:
             QMessageBox.warning(self, "Error", "No student found with that ID.")
             return
-        # Get all uniform fields
+        # Get all uniform fields 
         shako_num, ok1 = QInputDialog.getInt(self, "Assign Uniform", "Enter Shako Number:")
         if not ok1:
             return
@@ -246,16 +244,20 @@ class EquipmentManagementUI(QWidget):
         self.refresh_table()
 
     def show_outstanding_uniforms(self):
-        outstanding = db.get_students_with_outstanding_uniforms()
+        # Ask if user wants to filter by section
+        filter_section, ok = QInputDialog.getText(self, "Outstanding Uniforms", "Enter section to filter (leave blank for all):")
+        if ok and filter_section.strip():
+            outstanding = db.get_students_with_outstanding_uniforms_by_section(filter_section.strip())
+        else:
+            outstanding = db.get_students_with_outstanding_uniforms()
         if not outstanding:
             QMessageBox.information(self, "Info", "All uniforms are accounted for.")
         else:
-            # Unpack all columns: first, last, shako, hanger, garment, coat, pants
             message = "\n".join([
                 f"{row[0]} {row[1]}: Shako: {row[2]}, Hanger: {row[3]}, Garment: {row[4]}, Coat: {row[5]}, Pants: {row[6]}"
                 for row in outstanding
             ])
-            QMessageBox.information(self, "Outstanding Uniforms", message)
+            self.show_printable_results("Outstanding Uniforms", message)
 
     def assign_instrument_popup(self):
         student_id, ok = QInputDialog.getText(self, "Assign Instrument", "Enter Student ID:")
@@ -296,7 +298,12 @@ class EquipmentManagementUI(QWidget):
         self.refresh_table()
 
     def show_outstanding_instruments(self):
-        outstanding = db.get_students_with_outstanding_instruments()
+        # Ask if user wants to filter by section
+        filter_section, ok = QInputDialog.getText(self, "Outstanding Instruments", "Enter section to filter (leave blank for all):")
+        if ok and filter_section.strip():
+            outstanding = db.get_students_with_outstanding_instruments_by_section(filter_section.strip())
+        else:
+            outstanding = db.get_students_with_outstanding_instruments()
         if not outstanding:
             QMessageBox.information(self, "Info", "All instruments are accounted for.")
         else:
@@ -304,51 +311,113 @@ class EquipmentManagementUI(QWidget):
                 f"{row[0]} {row[1]}: {row[2]} (Serial: {row[3]}, Case: {row[4]})"
                 for row in outstanding
             ])
-            QMessageBox.information(self, "Outstanding Instruments", message)
+            self.show_printable_results("Outstanding Uniforms", message)
 
     def find_student_popup(self):
-        """Find a student by Student ID and allow view or edit."""
-        student_id, ok = QInputDialog.getText(self, "Find Student", "Enter Student ID:")
-        if not ok or not student_id.strip():
-            return
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
-            return
-
-        student = db.get_student_by_id(student_id.strip())
-        if not student:
-            QMessageBox.information(self, "Not Found", "No student found with that ID.")
+        """Find a student by Student ID or Section and allow view or edit."""
+        # Ask user which search type to use
+        search_type, ok = QInputDialog.getItem(
+            self, "Find Student", "Search by:", ["Student ID", "Section"], 0, False
+        )
+        if not ok:
             return
 
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Student Found")
-        layout = QVBoxLayout()
-        label = QLabel(f"Student: {student[2]}, {student[1]} (ID: {student[0]})")
-        layout.addWidget(label)
+        if search_type == "Student ID":
+            student_id, ok = QInputDialog.getText(self, "Find Student", "Enter Student ID:")
+            if not ok or not student_id.strip():
+                return
+            if not student_id.isdigit() or len(student_id) != 9:
+                QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+                return
 
-        button_layout = QHBoxLayout()
-        view_button = QPushButton("View")
-        edit_button = QPushButton("Edit")
-        button_layout.addWidget(view_button)
-        button_layout.addWidget(edit_button)
-        layout.addLayout(button_layout)
+            student = db.get_student_by_id(student_id.strip())
+            if not student:
+                QMessageBox.information(self, "Not Found", "No student found with that ID.")
+                return
 
-        dialog.setLayout(layout)
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Student Found")
+            layout = QVBoxLayout()
+            label = QLabel(f"Student: {student[2]}, {student[1]} (ID: {student[0]})")
+            layout.addWidget(label)
 
-        def handle_view():
-            self.show_student_info(student)
-            dialog.accept()
+            button_layout = QHBoxLayout()
+            view_button = QPushButton("View")
+            edit_button = QPushButton("Edit")
+            button_layout.addWidget(view_button)
+            button_layout.addWidget(edit_button)
+            layout.addLayout(button_layout)
 
-        def handle_edit():
-            edit_dialog = EditStudentDialog(student)
-            edit_dialog.exec()
-            self.refresh_table()
-            dialog.accept()
+            dialog.setLayout(layout)
 
-        view_button.clicked.connect(handle_view)
-        edit_button.clicked.connect(handle_edit)
+            def handle_view():
+                headers = [
+                    "Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
+                    "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+                    "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
+                    "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came up"
+                ]
+                info = "\n".join(f"{header}: {str(value) if value is not None else ''}" for header, value in zip(headers, student))
+                self.show_printable_results("Student Info", info)
+                dialog.accept()
 
-        dialog.exec()
+            def handle_edit():
+                edit_dialog = EditStudentDialog(student)
+                edit_dialog.exec()
+                self.refresh_table()
+                dialog.accept()
+
+            view_button.clicked.connect(handle_view)
+            edit_button.clicked.connect(handle_edit)
+
+            dialog.exec()
+
+        elif search_type == "Section":
+            section, ok = QInputDialog.getText(self, "Find Student", "Enter Section Name:")
+            if not ok or not section.strip():
+                return
+            students = db.get_students_by_section(section.strip())
+            if not students:
+                QMessageBox.information(self, "Not Found", "No students found in that section.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Select Student")
+            layout = QVBoxLayout()
+            label = QLabel("Select a student:")
+            layout.addWidget(label)
+            list_widget = QListWidget()
+            for student in students:
+                list_widget.addItem(f"{student[2]}, {student[1]} (ID: {student[0]})")
+            layout.addWidget(list_widget)
+
+            button_layout = QHBoxLayout()
+            view_button = QPushButton("View")
+            edit_button = QPushButton("Edit")
+            button_layout.addWidget(view_button)
+            button_layout.addWidget(edit_button)
+            layout.addLayout(button_layout)
+
+            dialog.setLayout(layout)
+
+            def handle_view():
+                idx = list_widget.currentRow()
+                if idx >= 0:
+                    self.show_student_info(students[idx])
+                    dialog.accept()
+
+            def handle_edit():
+                idx = list_widget.currentRow()
+                if idx >= 0:
+                    edit_dialog = EditStudentDialog(students[idx])
+                    edit_dialog.exec()
+                    self.refresh_table()
+                    dialog.accept()
+
+            view_button.clicked.connect(handle_view)
+            edit_button.clicked.connect(handle_edit)
+
+            dialog.exec()
 
     def show_student_info(self, student):
         """Display student info in a message box."""
@@ -468,4 +537,183 @@ class EquipmentManagementUI(QWidget):
                     return
 
         QMessageBox.information(self, "Restore", "Backup restored successfully!")
+        self.refresh_table()
+
+    def show_printable_results(self, title, message):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout()
+        label = QLabel(message)
+        label.setTextInteractionFlags(label.textInteractionFlags() | Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(label)
+
+        button_layout = QHBoxLayout()
+        print_button = QPushButton("Print")
+        full_screen_button = QPushButton("Full Screen")
+        close_button = QPushButton("Close")
+        button_layout.addWidget(print_button)
+        button_layout.addWidget(full_screen_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+
+        dialog.setLayout(layout)
+
+        def handle_print():
+            printer = QPrinter()
+            print_dialog = QPrintDialog(printer, dialog)
+            if print_dialog.exec():
+                # Print the label's text
+                text_edit = QTextEdit()
+                text_edit.setPlainText(label.text())
+                text_edit.print(printer)
+
+        print_button.clicked.connect(handle_print)
+        close_button.clicked.connect(dialog.accept)
+
+        dialog.exec()
+
+    def student_to_code_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Student to Bar/QR code", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+
+        student = db.get_student_by_id(student_id.strip())
+        if not student:
+            QMessageBox.information(self, "Not Found", "No student found with that ID.")
+            return
+
+        code_type, ok = QInputDialog.getItem(
+            self, "Choose Code Type", "Generate:", ["QR Code", "Barcode"], 0, False
+        )
+        if not ok:
+            return
+
+        info = f"ID: {student[0]}\nName: {student[2]}, {student[1]}\nSection: {student[3]}\nPhone: {student[4]}"
+
+        if code_type == "QR Code":
+            qr_img = qrcode.make(info)
+            qr_img = qr_img.convert("RGB")
+            buf = io.BytesIO()
+            qr_img.save(buf, format="PNG")
+            buf.seek(0)
+            qimage = QImage.fromData(buf.getvalue())
+            pixmap = QPixmap.fromImage(qimage)
+        else:
+            barcode_class = barcode.get_barcode_class('code128')
+            barcode_img = barcode_class(student[0], writer=ImageWriter()).render(writer_options={"write_text": False})
+            barcode_img = barcode_img.convert("RGB")
+            buf = io.BytesIO()
+            barcode_img.save(buf, format="PNG")
+            buf.seek(0)
+            qimage = QImage.fromData(buf.getvalue())
+            pixmap = QPixmap.fromImage(qimage)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Student {code_type}")
+
+        layout = QVBoxLayout()
+
+        code_label = QLabel()
+        code_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scaled_pixmap = pixmap.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        code_label.setPixmap(scaled_pixmap)
+        layout.addWidget(code_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        button_layout = QHBoxLayout()
+        print_button = QPushButton("Print")
+        close_button = QPushButton("Close")
+        button_layout.addWidget(print_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        dialog.setLayout(layout)
+
+        def handle_print():
+            printer = QPrinter()
+            print_dialog = QPrintDialog(printer, dialog)
+            if print_dialog.exec():
+                painter = QPainter(printer)
+                rect = painter.viewport()
+                size = scaled_pixmap.size()
+                size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
+                painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
+                painter.setWindow(scaled_pixmap.rect())
+                painter.drawPixmap(0, 0, scaled_pixmap)
+                painter.end()
+
+        print_button.clicked.connect(handle_print)
+        close_button.clicked.connect(dialog.accept)
+        dialog.exec()
+
+        full_screen_button = QPushButton("Full Screen")
+        button_layout.addWidget(full_screen_button)
+
+        def handle_full_screen():
+            fs_dialog = QDialog(self)
+            fs_dialog.setWindowTitle("Full Screen Code")
+            fs_layout = QVBoxLayout()
+            fs_label = QLabel()
+            fs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            fs_label.setPixmap(pixmap.scaled(400, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            fs_layout.addWidget(fs_label)
+            fs_dialog.setLayout(fs_layout)
+            fs_dialog.showMaximized()
+            fs_dialog.exec()
+
+        full_screen_button.clicked.connect(handle_full_screen)
+
+    def import_students_from_csv(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Import Students CSV", "", "CSV Files (*.csv)")
+        if not file_path:
+            return
+
+        with open(file_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                student_id = row.get("Student ID", "").strip()
+                if not student_id or not student_id.isdigit() or len(student_id) != 9:
+                    continue  # skip invalid IDs
+
+                # Gather all other fields, adjust keys to match your form/columns
+                fields = [
+                    student_id,
+                    row.get("First Name", ""),
+                    row.get("Last Name", ""),
+                    row.get("Section", ""),
+                    row.get("Phone", ""),
+                    row.get("Email", ""),
+                    row.get("Shako #", ""),
+                    row.get("Hanger #", ""),
+                    row.get("Garment Bag", ""),
+                    row.get("Coat #", ""),
+                    row.get("Pants #", ""),
+                    row.get("Spats Size", ""),
+                    row.get("Gloves Size", ""),
+                    row.get("Guardian Name", ""),
+                    row.get("Guardian Phone", ""),
+                    row.get("Instrument Name", ""),
+                    row.get("Instrument Serial", ""),
+                    row.get("Instrument Case", ""),
+                    row.get("Year Came up", "")
+                ]
+
+                # Check if student exists
+                existing = db.get_student_by_id(student_id)
+                if existing:
+                    # Update each field if new info is provided
+                    for idx, field_name in enumerate([
+                        "first_name", "last_name", "section", "phone", "email",
+                        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
+                        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
+                        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
+                    ], start=1):
+                        new_value = fields[idx]
+                        if new_value and new_value != str(existing[idx]):
+                            db.update_student(student_id, field_name, new_value)
+                else:
+                    db.add_student(*fields)
+
+        QMessageBox.information(self, "Import", "Student data imported and updated!")
         self.refresh_table()

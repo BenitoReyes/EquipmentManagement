@@ -185,6 +185,13 @@ def get_students_by_last_name(last_name):
     conn.close()
     return students
 
+def get_students_by_section(section):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT * FROM students WHERE section = ?", (section,))
+    students = cursor.fetchall()
+    conn.close()
+    return students
+
 def update_student(student_id, field, new_value):
     """Update a student's record safely."""
     conn, cursor = connect_db()
@@ -371,3 +378,35 @@ def add_student_from_inputs(inputs):
     ]
     values = [inputs[field].text().strip() for field in fields]
     add_student(*values)
+
+def get_students_with_outstanding_uniforms_by_section(section):
+    conn, cursor = connect_db()
+    cursor.execute('''
+        SELECT s.first_name, s.last_name, u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num
+        FROM students s
+        JOIN uniforms u ON s.student_id = u.student_id
+        WHERE u.is_checked_in = 0 AND s.section = ?
+          AND u.id = (
+              SELECT MAX(id) FROM uniforms
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+    ''', (section,))
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_students_with_outstanding_instruments_by_section(section):
+    conn, cursor = connect_db()
+    cursor.execute('''
+        SELECT s.first_name, s.last_name, i.instrument_name, i.instrument_serial, i.instrument_case
+        FROM students s
+        JOIN instruments i ON s.student_id = i.student_id
+        WHERE i.is_checked_in = 0 AND s.section = ?
+          AND i.id = (
+              SELECT MAX(id) FROM instruments
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+    ''', (section,))
+    results = cursor.fetchall()
+    conn.close()
+    return results
