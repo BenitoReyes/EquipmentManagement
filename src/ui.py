@@ -1,7 +1,6 @@
-from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox,QInputDialog, QToolButton, QMenu, QHBoxLayout, QDialog, QListWidget, QFileDialog
+from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox, QInputDialog, QToolButton, QMenu, QHBoxLayout, QDialog, QListWidget, QFileDialog, QTextEdit
 from PyQt6.QtGui import QAction, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QTextEdit
 from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
 import qrcode
 import barcode
@@ -10,14 +9,24 @@ from PIL import Image
 import io
 import csv
 
-from add_student_dialog import AddStudentDialog  # Import popup dialog
-import db  # Database functions
+from add_student_dialog import AddStudentDialog
+import db
 from edit_student_dialog import EditStudentDialog
 
+import sys, os
+
+def resource_path(relative_path):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
 def load_stylesheet():
-    with open("src/styles.qss", "r") as f:
+    path = resource_path("src/styles.qss")
+    with open(path, "r") as f:
         return f.read()
 
+
+def desanitize(value):
+    return None if value.strip().lower() == "none" or value.strip() == "" else value.strip()
 
 class EquipmentManagementUI(QWidget):
 
@@ -32,11 +41,10 @@ class EquipmentManagementUI(QWidget):
         self.title_label = QLabel("Equipment Management System")
         layout.addWidget(self.title_label)
 
-        # --- Centered Button Layout ---
+        # --- Button Layout ---
         button_layout = QHBoxLayout()
         button_layout.addStretch(1)
 
-        # Student Operations Menu
         student_menu = QMenu()
         student_menu.addAction("Add Student", self.open_add_student_popup)
         student_menu.addAction("Update Student", self.update_student)
@@ -51,7 +59,6 @@ class EquipmentManagementUI(QWidget):
         student_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button_layout.addWidget(student_ops)
 
-        # Equipment Operations Menu
         equipment_menu = QMenu()
         equipment_menu.addAction("Assign Uniform", self.assign_uniform_popup)
         equipment_menu.addAction("Return Uniform", self.return_uniform_popup)
@@ -66,8 +73,7 @@ class EquipmentManagementUI(QWidget):
         equipment_ops.setMenu(equipment_menu)
         equipment_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button_layout.addWidget(equipment_ops)
-        
-        # Administrative Operations Menu
+
         admin_menu = QMenu()
         admin_menu.addAction("Delete ALL Students", self.delete_all_students)
         admin_menu.addSeparator()
@@ -81,33 +87,41 @@ class EquipmentManagementUI(QWidget):
         button_layout.addWidget(admin_ops)
 
         button_layout.addStretch(1)
-        layout.addLayout(button_layout)       
-        # --- End Centered Button Layout ---
+        layout.addLayout(button_layout)
+        # --- End Button Layout ---
 
-        # Student Records Table
         self.student_table = QTableWidget()
-        self.student_table.setColumnCount(19)  # Adjust for new field
+        self.student_table.setColumnCount(19)
         self.student_table.setHorizontalHeaderLabels([
             "Student ID", "Last Name", "First Name", "Section", "Phone", "Email",
             "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
             "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
-            "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came up"
+            "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came Up"
         ])
         layout.addWidget(self.student_table)
 
         self.setLayout(layout)
         self.student_table.clearContents()
         self.refresh_table()
-        self.student_table.sortItems(1)  # 1 is the column index for Last Name
+        self.student_table.sortItems(1)
 
+    def sanitize(self, value):
+        return "" if value is None or str(value).strip().lower() == "none" else str(value)
+
+    def refresh_table(self):
+        self.student_table.setRowCount(0)
+        students = db.get_students_with_uniforms_and_instruments()
+        for row_idx, student in enumerate(students):
+            self.student_table.insertRow(row_idx)
+            for col_idx, value in enumerate(student):
+                display_value = "" if value is None else str(value)
+                self.student_table.setItem(row_idx, col_idx, QTableWidgetItem(display_value))
+        self.student_table.sortItems(1)
 
     def open_add_student_popup(self):
-        """Opens the add student dialog."""
         dialog = AddStudentDialog()
         if dialog.exec():
-            self.student_table.clearContents()
             self.refresh_table()
-
 
     def update_student(self):
 
@@ -145,6 +159,10 @@ class EquipmentManagementUI(QWidget):
             button.clicked.connect(handle_edit)
             dialog.exec()
             return
+        # Add validation for Student ID
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
         student_data = db.get_student_by_id(student_id.strip())
         if not student_data:
             QMessageBox.warning(self, "Error", "No student found with that ID.")
@@ -156,11 +174,16 @@ class EquipmentManagementUI(QWidget):
 
 
 
+
     def delete_student(self):
         """Step 1: Ask user for Student ID before deleting."""
         student_id, ok = QInputDialog.getText(self, "Delete Student", "Enter Student ID:")
         if not ok or not student_id.strip():
-            QMessageBox.warning(self, "Error", "Student ID is required!")
+            return
+
+        # Add validation for Student ID
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
             return
 
         # Step 2: Check if the student exists before deleting
@@ -184,134 +207,31 @@ class EquipmentManagementUI(QWidget):
 
 
 
-
-    def refresh_table(self):
-        """Refresh the student table with up-to-date uniform assignments."""
-        self.student_table.setRowCount(0)
-        students = db.get_students_with_uniforms_and_instruments()
-        for row_idx, student in enumerate(students):
-            self.student_table.insertRow(row_idx)
-            for col_idx, value in enumerate(student):
-                display_value = "" if value is None else str(value)
-                self.student_table.setItem(row_idx, col_idx, QTableWidgetItem(display_value))
-        self.student_table.sortItems(1)  # 1 is the column index for Last Name
-
-    def assign_uniform_popup(self):
-        student_id, ok = QInputDialog.getText(self, "Assign Uniform", "Enter Student ID:")
-        if not ok or not student_id.strip():
-            return
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
-            return
-        student_data = db.get_student_by_id(student_id.strip())
-        if not student_data:
-            QMessageBox.warning(self, "Error", "No student found with that ID.")
-            return
-        # Get all uniform fields 
-        shako_num, ok1 = QInputDialog.getInt(self, "Assign Uniform", "Enter Shako Number:")
-        if not ok1:
-            return
-        hanger_num, ok2 = QInputDialog.getInt(self, "Assign Uniform", "Enter Hanger Number:")
-        if not ok2:
-            return
-        garment_bag, ok3 = QInputDialog.getText(self, "Assign Uniform", "Enter Garment Bag (Y/N):")
-        if not ok3 or not garment_bag.strip():
-            return
-        coat_num, ok4 = QInputDialog.getInt(self, "Assign Uniform", "Enter Coat Number:")
-        if not ok4:
-            return
-        pants_num, ok5 = QInputDialog.getInt(self, "Assign Uniform", "Enter Pants Number:")
-        if not ok5:
+    def delete_all_students(self):
+        # Combined first and second confirmation
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete All",
+            "Are you absolutely sure you want to delete ALL students? This will permanently remove ALL student records, uniforms, and instruments. This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Assign uniform with all fields
-        db.assign_uniform(student_id.strip(), shako_num, hanger_num, garment_bag.strip(), coat_num, pants_num)
-        QMessageBox.information(self, "Success", "Uniform assigned!")
+        # Second confirmation: require typing "DELETE ALL"
+        text, ok = QInputDialog.getText(
+            self,
+            "Final Confirmation",
+            'Type "DELETE ALL" (all caps, no quotes) to confirm:'
+        )
+        if not ok or text.strip() != "DELETE ALL":
+            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
+            return
+
+        # Perform deletion
+        db.delete_all_students()
+        QMessageBox.information(self, "Deleted", "All students have been deleted.")
         self.refresh_table()
-
-    def return_uniform_popup(self):
-        student_id, ok = QInputDialog.getText(self, "Return Uniform", "Enter Student ID:")
-        if not ok or not student_id.strip():
-            return
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
-            return
-        if not db.get_student_by_id(student_id.strip()):
-            QMessageBox.warning(self, "Error", "No student found with that ID.")
-            return
-        db.return_uniform(student_id.strip())
-        QMessageBox.information(self, "Success", "Uniform marked as returned.")
-        self.refresh_table()
-
-    def show_outstanding_uniforms(self):
-        # Ask if user wants to filter by section
-        filter_section, ok = QInputDialog.getText(self, "Outstanding Uniforms", "Enter section to filter (leave blank for all):")
-        if ok and filter_section.strip():
-            outstanding = db.get_students_with_outstanding_uniforms_by_section(filter_section.strip())
-        else:
-            outstanding = db.get_students_with_outstanding_uniforms()
-        if not outstanding:
-            QMessageBox.information(self, "Info", "All uniforms are accounted for.")
-        else:
-            message = "\n".join([
-                f"{row[0]} {row[1]}: Shako: {row[2]}, Hanger: {row[3]}, Garment: {row[4]}, Coat: {row[5]}, Pants: {row[6]}"
-                for row in outstanding
-            ])
-            self.show_printable_results("Outstanding Uniforms", message)
-
-    def assign_instrument_popup(self):
-        student_id, ok = QInputDialog.getText(self, "Assign Instrument", "Enter Student ID:")
-        if not ok or not student_id.strip():
-            return
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
-            return
-        if not db.get_student_by_id(student_id.strip()):
-            QMessageBox.warning(self, "Error", "No student found with that ID.")
-            return
-        instrument_name, ok1 = QInputDialog.getText(self, "Assign Instrument", "Instrument Name:")
-        if not ok1 or not instrument_name.strip():
-            return
-        instrument_serial, ok2 = QInputDialog.getText(self, "Assign Instrument", "Instrument Serial:")
-        if not ok2 or not instrument_serial.strip():
-            return
-        instrument_case, ok3 = QInputDialog.getText(self, "Assign Instrument", "Instrument Case:")
-        if not ok3 or not instrument_case.strip():
-            return
-
-        db.assign_instrument(student_id.strip(), instrument_name.strip(), instrument_serial.strip(), instrument_case.strip())
-        QMessageBox.information(self, "Success", "Instrument assigned!")
-        self.refresh_table()
-
-    def return_instrument_popup(self):
-        student_id, ok = QInputDialog.getText(self, "Return Instrument", "Enter Student ID:")
-        if not ok or not student_id.strip():
-            return
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
-            return
-        if not db.get_student_by_id(student_id.strip()):
-            QMessageBox.warning(self, "Error", "No student found with that ID.")
-            return
-        db.return_instrument(student_id.strip())
-        QMessageBox.information(self, "Success", "Instrument marked as returned.")
-        self.refresh_table()
-
-    def show_outstanding_instruments(self):
-        # Ask if user wants to filter by section
-        filter_section, ok = QInputDialog.getText(self, "Outstanding Instruments", "Enter section to filter (leave blank for all):")
-        if ok and filter_section.strip():
-            outstanding = db.get_students_with_outstanding_instruments_by_section(filter_section.strip())
-        else:
-            outstanding = db.get_students_with_outstanding_instruments()
-        if not outstanding:
-            QMessageBox.information(self, "Info", "All instruments are accounted for.")
-        else:
-            message = "\n".join([
-                f"{row[0]} {row[1]}: {row[2]} (Serial: {row[3]}, Case: {row[4]})"
-                for row in outstanding
-            ])
-            self.show_printable_results("Outstanding Uniforms", message)
 
     def find_student_popup(self):
         """Find a student by Student ID or Section and allow view or edit."""
@@ -419,6 +339,7 @@ class EquipmentManagementUI(QWidget):
 
             dialog.exec()
 
+
     def show_student_info(self, student):
         """Display student info in a message box."""
         headers = [
@@ -430,114 +351,226 @@ class EquipmentManagementUI(QWidget):
         info = "\n".join(f"{header}: {str(value) if value is not None else ''}" for header, value in zip(headers, student))
         QMessageBox.information(self, "Student Info", info)
 
-    def delete_all_students(self):
-        # Combined first and second confirmation
-        reply = QMessageBox.question(
-            self,
-            "Confirm Delete All",
-            "Are you absolutely sure you want to delete ALL students? This will permanently remove ALL student records, uniforms, and instruments. This cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+    def assign_uniform_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Assign Uniform", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+        student_data = db.get_student_by_id(student_id.strip())
+        if not student_data:
+            QMessageBox.warning(self, "Error", "No student found with that ID.")
+            return
+        # Get all uniform fields 
+        shako_num, ok1 = QInputDialog.getInt(self, "Assign Uniform", "Enter Shako Number:")
+        if not ok1:
+            return
+        hanger_num, ok2 = QInputDialog.getInt(self, "Assign Uniform", "Enter Hanger Number:")
+        if not ok2:
+            return
+        garment_bag, ok3 = QInputDialog.getText(self, "Assign Uniform", "Enter Garment Bag:")
+        if not ok3 or not garment_bag.strip():
+            return
+        coat_num, ok4 = QInputDialog.getInt(self, "Assign Uniform", "Enter Coat Number:")
+        if not ok4:
+            return
+        pants_num, ok5 = QInputDialog.getInt(self, "Assign Uniform", "Enter Pants Number:")
+        if not ok5:
             return
 
-        # Second confirmation: require typing "DELETE ALL"
-        text, ok = QInputDialog.getText(
-            self,
-            "Final Confirmation",
-            'Type "DELETE ALL" (all caps, no quotes) to confirm:'
-        )
-        if not ok or text.strip() != "DELETE ALL":
-            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
-            return
-
-        # Perform deletion
-        db.delete_all_students()
-        QMessageBox.information(self, "Deleted", "All students have been deleted.")
+        # Assign uniform with all fields
+        db.assign_uniform(student_id.strip(), shako_num, hanger_num, garment_bag.strip(), coat_num, pants_num)
+        QMessageBox.information(self, "Success", "Uniform assigned!")
         self.refresh_table()
 
+
+    def return_uniform_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Return Uniform", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+        if not db.get_student_by_id(student_id.strip()):
+            QMessageBox.warning(self, "Error", "No student found with that ID.")
+            return
+        db.return_uniform(student_id.strip())
+        QMessageBox.information(self, "Success", "Uniform marked as returned.")
+        self.refresh_table()
+
+
+    def show_outstanding_uniforms(self):
+        # Ask if user wants to filter by section
+        filter_section, ok = QInputDialog.getText(self, "Outstanding Uniforms", "Enter section to filter (leave blank for all):")
+        if ok and filter_section.strip():
+            outstanding = db.get_students_with_outstanding_uniforms_by_section(filter_section.strip())
+        else:
+            outstanding = db.get_students_with_outstanding_uniforms()
+        if not outstanding:
+            QMessageBox.information(self, "Info", "All uniforms are accounted for.")
+        else:
+            message = "\n".join([
+                f"{row[0]} {row[1]}: Shako: {row[2]}, Hanger: {row[3]}, Garment: {row[4]}, Coat: {row[5]}, Pants: {row[6]}"
+                for row in outstanding
+            ])
+            self.show_printable_results("Outstanding Uniforms", message)
+
+
+    def assign_instrument_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Assign Instrument", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+        if not db.get_student_by_id(student_id.strip()):
+            QMessageBox.warning(self, "Error", "No student found with that ID.")
+            return
+        instrument_name, ok1 = QInputDialog.getText(self, "Assign Instrument", "Instrument Name:")
+        if not ok1 or not instrument_name.strip():
+            return
+        instrument_serial, ok2 = QInputDialog.getText(self, "Assign Instrument", "Instrument Serial:")
+        if not ok2 or not instrument_serial.strip():
+            return
+        instrument_case, ok3 = QInputDialog.getText(self, "Assign Instrument", "Instrument Case:")
+        if not ok3 or not instrument_case.strip():
+            return
+
+        db.assign_instrument(student_id.strip(), instrument_name.strip(), instrument_serial.strip(), instrument_case.strip())
+        QMessageBox.information(self, "Success", "Instrument assigned!")
+        self.refresh_table()
+
+    def return_instrument_popup(self):
+        student_id, ok = QInputDialog.getText(self, "Return Instrument", "Enter Student ID:")
+        if not ok or not student_id.strip():
+            return
+        if not student_id.isdigit() or len(student_id) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+            return
+        if not db.get_student_by_id(student_id.strip()):
+            QMessageBox.warning(self, "Error", "No student found with that ID.")
+            return
+        db.return_instrument(student_id.strip())
+        QMessageBox.information(self, "Success", "Instrument marked as returned.")
+        self.refresh_table()
+
+    def show_outstanding_instruments(self):
+        # Ask if user wants to filter by section
+        filter_section, ok = QInputDialog.getText(self, "Outstanding Instruments", "Enter section to filter (leave blank for all):")
+        if ok and filter_section.strip():
+            outstanding = db.get_students_with_outstanding_instruments_by_section(filter_section.strip())
+        else:
+            outstanding = db.get_students_with_outstanding_instruments()
+        if not outstanding:
+            QMessageBox.information(self, "Info", "All instruments are accounted for.")
+        else:
+            message = "\n".join([
+                f"{row[0]} {row[1]}: {row[2]} (Serial: {row[3]}, Case: {row[4]})"
+                for row in outstanding
+            ])
+            self.show_printable_results("Outstanding Uniforms", message)
+
     def create_backup(self):
-        """Export all student, uniform, and instrument data to a backup text file."""
-        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        try:
+            file_path, _ = QFileDialog.getSaveFileName(self, "Create Backup", "", "Text Files (*.txt)")
+            if not file_path:
+                return
 
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Backup", "", "Text Files (*.txt)")
-        if not file_path:
-            return
+            with open(file_path, "w", encoding="utf-8") as backup_file:
+                # Backup students
+                for student in db.get_students():  # instead of db.get_all_students()
+                    backup_file.write("students," + ",".join(self.sanitize(field) for field in student) + "\n")
 
-        students = db.get_students()
-        uniforms = db.get_all_uniforms()
-        instruments = db.get_all_instruments()
+                # Backup uniforms
+                for uniform in db.get_all_uniforms():
+                    backup_file.write("uniforms," + ",".join(self.sanitize(field) for field in uniform) + "\n")
 
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write("STUDENTS\n")
-            for row in students:
-                f.write("|".join(str(x) if x is not None else "" for x in row) + "\n")
-            f.write("UNIFORMS\n")
-            for row in uniforms:
-                f.write("|".join(str(x) if x is not None else "" for x in row) + "\n")
-            f.write("INSTRUMENTS\n")
-            for row in instruments:
-                f.write("|".join(str(x) if x is not None else "" for x in row) + "\n")
-        QMessageBox.information(self, "Backup", "Backup created successfully!")
+                # Backup instruments
+                for instrument in db.get_all_instruments():
+                    backup_file.write("instruments," + ",".join(self.sanitize(field) for field in instrument) + "\n")
 
+            QMessageBox.information(self, "Backup", "Backup created successfully!")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Backup Error", f"Something went wrong during backup:\n{e}")
+            
     def use_backup(self):
-        """Restore all data from a backup text file (deletes current data!)."""
-        from PyQt6.QtWidgets import QFileDialog, QMessageBox
-
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Backup", "", "Text Files (*.txt)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Restore Backup", "", "Text Files (*.txt)")
         if not file_path:
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Confirm Restore",
-            "This will DELETE ALL current data and restore from backup. Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
+        # Optionally clear existing tables before restore
+        db.delete_all_students()
+        db.delete_all_uniforms()
+        db.delete_all_instruments()
 
-        db.delete_all_students()  # This deletes all students, uniforms, instruments
-
-        section = None
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line == "STUDENTS":
-                    section = "students"
-                    continue
-                elif line == "UNIFORMS":
-                    section = "uniforms"
-                    continue
-                elif line == "INSTRUMENTS":
-                    section = "instruments"
-                    continue
                 if not line:
                     continue
-                fields = [x if x != "" else None for x in line.split("|")]
+                parts = line.split(",")
+                section = parts[0]
+                fields = parts[1:]
+
                 try:
                     if section == "students":
-                        # Make sure the number of fields matches your add_student signature
                         if len(fields) == 19:
                             db.add_student(*fields)
                     elif section == "uniforms":
-                        # If your uniforms table is: id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in
-                        # fields[0] = id, fields[1] = student_id, ..., fields[6] = pants_num, fields[7] = is_checked_in
-                        # Only pass fields[1] through fields[6] (skip id and is_checked_in)
-                        if len(fields) >= 7:
-                            db.assign_uniform(*fields[1:7])
+                        # id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in
+                        if len(fields) == 8:
+                            db.add_uniform(*fields)
                     elif section == "instruments":
-                        # If your instruments table is: id, student_id, instrument_name, instrument_serial, instrument_case, is_checked_in
-                        # fields[0] = id, fields[1] = student_id, ..., fields[4] = instrument_case, fields[5] = is_checked_in
-                        # Only pass fields[1] through fields[4] (skip id and is_checked_in)
-                        if len(fields) >= 5:
-                            db.assign_instrument(*fields[1:5])
+                        # id, student_id, instrument_name, instrument_serial, instrument_case, is_checked_in
+                        if len(fields) == 6:
+                            db.add_instrument(*fields)
                 except Exception as e:
                     QMessageBox.critical(self, "Restore Error", f"Error restoring line:\n{line}\n\n{e}")
                     return
 
         QMessageBox.information(self, "Restore", "Backup restored successfully!")
         self.refresh_table()
+
+
+    def import_students_from_csv(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Import Students CSV", "", "CSV Files (*.csv)")
+        if not file_path:
+            return
+
+        with open(file_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                student_id = desanitize(row.get("Student ID", ""))
+                if not student_id or not student_id.isdigit() or len(student_id) != 9:
+                    continue  # skip invalid IDs
+
+                fields = [desanitize(row.get(col, "")) for col in [
+                    "Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
+                    "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+                    "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
+                    "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came Up"
+                ]]
+
+                existing = db.get_student_by_id(student_id)
+                if existing:
+                    field_names = [
+                        "first_name", "last_name", "section", "phone", "email",
+                        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
+                        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
+                        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
+                    ]
+                    for idx, field_name in enumerate(field_names, start=1):
+                        new_value = fields[idx]
+                        if new_value and new_value != str(existing[idx]):
+                            db.update_student(student_id, field_name, new_value)
+                else:
+                    db.add_student(*fields)
+
+        QMessageBox.information(self, "Import", "Student data imported and updated!")
+        self.refresh_table()
+
 
     def show_printable_results(self, title, message):
         dialog = QDialog(self)
@@ -549,10 +582,8 @@ class EquipmentManagementUI(QWidget):
 
         button_layout = QHBoxLayout()
         print_button = QPushButton("Print")
-        full_screen_button = QPushButton("Full Screen")
         close_button = QPushButton("Close")
         button_layout.addWidget(print_button)
-        button_layout.addWidget(full_screen_button)
         button_layout.addWidget(close_button)
         layout.addLayout(button_layout)
 
@@ -571,6 +602,7 @@ class EquipmentManagementUI(QWidget):
         close_button.clicked.connect(dialog.accept)
 
         dialog.exec()
+
 
     def student_to_code_popup(self):
         student_id, ok = QInputDialog.getText(self, "Student to Bar/QR code", "Enter Student ID:")
@@ -664,56 +696,5 @@ class EquipmentManagementUI(QWidget):
 
         full_screen_button.clicked.connect(handle_full_screen)
 
-    def import_students_from_csv(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Import Students CSV", "", "CSV Files (*.csv)")
-        if not file_path:
-            return
 
-        with open(file_path, newline='', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                student_id = row.get("Student ID", "").strip()
-                if not student_id or not student_id.isdigit() or len(student_id) != 9:
-                    continue  # skip invalid IDs
 
-                # Gather all other fields, adjust keys to match your form/columns
-                fields = [
-                    student_id,
-                    row.get("First Name", ""),
-                    row.get("Last Name", ""),
-                    row.get("Section", ""),
-                    row.get("Phone", ""),
-                    row.get("Email", ""),
-                    row.get("Shako #", ""),
-                    row.get("Hanger #", ""),
-                    row.get("Garment Bag", ""),
-                    row.get("Coat #", ""),
-                    row.get("Pants #", ""),
-                    row.get("Spats Size", ""),
-                    row.get("Gloves Size", ""),
-                    row.get("Guardian Name", ""),
-                    row.get("Guardian Phone", ""),
-                    row.get("Instrument Name", ""),
-                    row.get("Instrument Serial", ""),
-                    row.get("Instrument Case", ""),
-                    row.get("Year Came up", "")
-                ]
-
-                # Check if student exists
-                existing = db.get_student_by_id(student_id)
-                if existing:
-                    # Update each field if new info is provided
-                    for idx, field_name in enumerate([
-                        "first_name", "last_name", "section", "phone", "email",
-                        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
-                        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
-                        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
-                    ], start=1):
-                        new_value = fields[idx]
-                        if new_value and new_value != str(existing[idx]):
-                            db.update_student(student_id, field_name, new_value)
-                else:
-                    db.add_student(*fields)
-
-        QMessageBox.information(self, "Import", "Student data imported and updated!")
-        self.refresh_table()

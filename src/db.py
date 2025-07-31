@@ -271,14 +271,47 @@ def return_uniform(student_id):
     conn.commit()
     conn.close()
 
-def get_students_with_outstanding_uniforms():
+def get_students_with_outstanding_instruments():
+    """Get all students with instruments that are not returned and contain actual data."""
     conn, cursor = connect_db()
     cursor.execute('''
-        SELECT s.first_name, s.last_name, u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num
+        SELECT s.first_name, s.last_name, i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
-        JOIN uniforms u ON s.student_id = u.student_id
-        WHERE u.is_checked_in = 0
+        JOIN instruments i ON s.student_id = i.student_id
+        WHERE i.is_checked_in = 0
+          AND i.id = (
+              SELECT MAX(id) FROM instruments
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+          AND (
+              i.instrument_name IS NOT NULL OR
+              i.instrument_serial IS NOT NULL OR
+              i.instrument_case IS NOT NULL
+          )
     ''')
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_students_with_outstanding_instruments_by_section(section):
+    """Get all students from a specific section with instruments that are not returned and contain actual data."""
+    conn, cursor = connect_db()
+    cursor.execute('''
+        SELECT s.first_name, s.last_name, i.instrument_name, i.instrument_serial, i.instrument_case
+        FROM students s
+        JOIN instruments i ON s.student_id = i.student_id
+        WHERE i.is_checked_in = 0
+          AND s.section = ?
+          AND i.id = (
+              SELECT MAX(id) FROM instruments
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+          AND (
+              i.instrument_name IS NOT NULL OR
+              i.instrument_serial IS NOT NULL OR
+              i.instrument_case IS NOT NULL
+          )
+    ''', (section,))
     results = cursor.fetchall()
     conn.close()
     return results
@@ -327,15 +360,52 @@ def return_instrument(student_id):
     conn.commit()
     conn.close()
 
-def get_students_with_outstanding_instruments():
-    """Get all students with instruments that are not returned."""
+def get_students_with_outstanding_uniforms():
+    """Get all students with uniforms that are not returned and contain actual data."""
     conn, cursor = connect_db()
     cursor.execute('''
-        SELECT s.first_name, s.last_name, i.instrument_name, i.instrument_serial, i.instrument_case
+        SELECT s.first_name, s.last_name, u.shako_num, u.hanger_num,
+               u.garment_bag, u.coat_num, u.pants_num
         FROM students s
-        JOIN instruments i ON s.student_id = i.student_id
-        WHERE i.is_checked_in = 0
+        JOIN uniforms u ON s.student_id = u.student_id
+        WHERE u.is_checked_in = 0
+          AND u.id = (
+              SELECT MAX(id) FROM uniforms
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+          AND (
+              u.shako_num IS NOT NULL OR
+              u.hanger_num IS NOT NULL OR
+              u.garment_bag IS NOT NULL OR
+              u.coat_num IS NOT NULL OR
+              u.pants_num IS NOT NULL
+          )
     ''')
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_students_with_outstanding_uniforms_by_section(section):
+    conn, cursor = connect_db()
+    cursor.execute('''
+        SELECT s.first_name, s.last_name, u.shako_num, u.hanger_num,
+               u.garment_bag, u.coat_num, u.pants_num
+        FROM students s
+        JOIN uniforms u ON s.student_id = u.student_id
+        WHERE u.is_checked_in = 0
+          AND s.section = ?
+          AND u.id = (
+              SELECT MAX(id) FROM uniforms
+              WHERE student_id = s.student_id AND is_checked_in = 0
+          )
+          AND (
+              u.shako_num IS NOT NULL OR
+              u.hanger_num IS NOT NULL OR
+              u.garment_bag IS NOT NULL OR
+              u.coat_num IS NOT NULL OR
+              u.pants_num IS NOT NULL
+          )
+    ''', (section,))
     results = cursor.fetchall()
     conn.close()
     return results
@@ -350,63 +420,48 @@ create_instrument_table()
 def delete_all_students():
     conn, cursor = connect_db()
     cursor.execute("DELETE FROM students")
+    conn.commit()
+    conn.close()
+
+def delete_all_uniforms():
+    conn, cursor = connect_db()
     cursor.execute("DELETE FROM uniforms")
+    conn.commit()
+    conn.close()
+
+def delete_all_instruments():
+    conn, cursor = connect_db()
     cursor.execute("DELETE FROM instruments")
     conn.commit()
     conn.close()
 
+def add_uniform(id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in):
+    conn, cursor = connect_db()
+    cursor.execute(
+        "INSERT INTO uniforms (id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in)
+    )
+    conn.commit()
+    conn.close()
+
+def add_instrument(id, student_id, instrument_name, instrument_serial, instrument_case, is_checked_in):
+    conn, cursor = connect_db()
+    cursor.execute(
+        "INSERT INTO instruments (id, student_id, instrument_name, instrument_serial, instrument_case, is_checked_in) VALUES (?, ?, ?, ?, ?, ?)",
+        (id, student_id, instrument_name, instrument_serial, instrument_case, is_checked_in)
+    )
+    conn.commit()
+    conn.close()
 def get_all_uniforms():
     conn, cursor = connect_db()
-    cursor.execute("SELECT * FROM uniforms")
-    data = cursor.fetchall()
-    conn.close()
-    return data
+    # Fetch all uniforms
+    query = "SELECT * FROM uniforms"
+    cursor.execute(query)
+    return cursor.fetchall()
 
 def get_all_instruments():
     conn, cursor = connect_db()
-    cursor.execute("SELECT * FROM instruments")
-    data = cursor.fetchall()
-    conn.close()
-    return data
-
-def add_student_from_inputs(inputs):
-    fields = [
-        "student_id", "first_name", "last_name", "section", "phone", "email",
-        "shako_num", "hanger_num", "garment_bag", "coat_num", "pants_num",
-        "spats_size", "gloves_size", "guardian_name", "guardian_phone",
-        "instrument_name", "instrument_serial", "instrument_case", "year_came_up"
-    ]
-    values = [inputs[field].text().strip() for field in fields]
-    add_student(*values)
-
-def get_students_with_outstanding_uniforms_by_section(section):
-    conn, cursor = connect_db()
-    cursor.execute('''
-        SELECT s.first_name, s.last_name, u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num
-        FROM students s
-        JOIN uniforms u ON s.student_id = u.student_id
-        WHERE u.is_checked_in = 0 AND s.section = ?
-          AND u.id = (
-              SELECT MAX(id) FROM uniforms
-              WHERE student_id = s.student_id AND is_checked_in = 0
-          )
-    ''', (section,))
-    results = cursor.fetchall()
-    conn.close()
-    return results
-
-def get_students_with_outstanding_instruments_by_section(section):
-    conn, cursor = connect_db()
-    cursor.execute('''
-        SELECT s.first_name, s.last_name, i.instrument_name, i.instrument_serial, i.instrument_case
-        FROM students s
-        JOIN instruments i ON s.student_id = i.student_id
-        WHERE i.is_checked_in = 0 AND s.section = ?
-          AND i.id = (
-              SELECT MAX(id) FROM instruments
-              WHERE student_id = s.student_id AND is_checked_in = 0
-          )
-    ''', (section,))
-    results = cursor.fetchall()
-    conn.close()
-    return results
+    # Fetch all instruments
+    query = "SELECT * FROM instruments"
+    cursor.execute(query)
+    return cursor.fetchall()

@@ -34,9 +34,13 @@ class AddStudentDialog(QDialog):
 
     def add_student(self):
         """Handles adding a student to the database."""
+        student_id = self.inputs["Student ID"].text().strip()
+        if db.get_student_by_id(student_id):
+            QMessageBox.warning(self, "Error", "A student with that ID already exists!")
+            return  # Do NOT close the dialog
+
         values = [self.inputs[field].text().strip() for field in self.inputs]
 
-        student_id = values[0]
         first_name = values[1]
         last_name = values[2]
         phone = values[4]
@@ -48,12 +52,12 @@ class AddStudentDialog(QDialog):
             return
 
         # Validate Phone Number
-        if not phone.isdigit() or len(phone) != 10:
+        if phone and (not phone.isdigit() or len(phone) != 10):
             QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits.")
             return
 
         # Validate Guardian Phone Number
-        if not guardian_phone.isdigit() or len(guardian_phone) != 10:
+        if guardian_phone and(not guardian_phone.isdigit() or len(guardian_phone) != 10):
             QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits.")
             return
 
