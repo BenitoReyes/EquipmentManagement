@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QMessageBox, QInputDialog, QToolButton, QMenu, QHBoxLayout, QDialog, QListWidget, QFileDialog, QTextEdit
-from PyQt6.QtGui import QAction, QPixmap, QImage, QPainter
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QPixmap, QImage, QPainter, QIcon
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
 import qrcode
 import barcode
@@ -20,7 +20,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def load_stylesheet():
-    path = resource_path("src/styles.qss")
+    path = resource_path("styles.qss")
     with open(path, "r") as f:
         return f.read()
 
@@ -86,6 +86,14 @@ class EquipmentManagementUI(QWidget):
         admin_ops.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button_layout.addWidget(admin_ops)
 
+        info_button = QPushButton()
+        info_button.setIcon(QIcon.fromTheme("system-help"))  # Uses system icon if available
+        info_button.setToolTip("About this app")
+        info_button.clicked.connect(self.show_about_dialog)
+        info_button.setIconSize(QSize(19, 19))  # Adjust size to fit nicely
+        # Add to layout (e.g., top-right corner)
+        button_layout.addWidget(info_button)
+        button_layout.setContentsMargins(5, 5, 5, 5)
         button_layout.addStretch(1)
         layout.addLayout(button_layout)
         # --- End Button Layout ---
@@ -104,6 +112,14 @@ class EquipmentManagementUI(QWidget):
         self.student_table.clearContents()
         self.refresh_table()
         self.student_table.sortItems(1)
+
+    def show_about_dialog(self):
+        QMessageBox.information(
+            self,
+            "About This App",
+            "Made by: Benito Reyes \n(Fall 2021 Trumpet and Spring 2024 DI,, Ace) in 2025.\n\n"
+            "Code can be found at:\nhttps://github.com/BenitoReyes/EquipmentManagement"
+        )
 
     def sanitize(self, value):
         return "" if value is None or str(value).strip().lower() == "none" else str(value)
@@ -312,8 +328,8 @@ class EquipmentManagementUI(QWidget):
             layout.addWidget(list_widget)
 
             button_layout = QHBoxLayout()
-            view_button = QPushButton("View")
-            edit_button = QPushButton("Edit")
+            view_button = QPushButton("View All")
+            edit_button = QPushButton("Edit Selected")
             button_layout.addWidget(view_button)
             button_layout.addWidget(edit_button)
             layout.addLayout(button_layout)
@@ -321,10 +337,21 @@ class EquipmentManagementUI(QWidget):
             dialog.setLayout(layout)
 
             def handle_view():
-                idx = list_widget.currentRow()
-                if idx >= 0:
-                    self.show_student_info(students[idx])
-                    dialog.accept()
+                headers = [
+                    "Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
+                    "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+                    "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
+                    "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came up"
+                ]
+                info = ""
+                for student in students:
+                    student_info = "\n".join(
+                        f"{header}: {str(value) if value is not None else ''}"
+                        for header, value in zip(headers, student)
+                    )
+                    info += student_info + "\n" + "-" * 40 + "\n"
+                self.show_printable_results(f"Students in Section: {section.strip()}", info)
+                dialog.accept()
 
             def handle_edit():
                 idx = list_widget.currentRow()
@@ -338,6 +365,7 @@ class EquipmentManagementUI(QWidget):
             edit_button.clicked.connect(handle_edit)
 
             dialog.exec()
+        
 
 
     def show_student_info(self, student):

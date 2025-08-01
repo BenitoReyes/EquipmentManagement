@@ -54,24 +54,27 @@ class EditStudentDialog(QDialog):
             "Year Came up": "year_came_up"
         }
 
-        # Validate Student ID (self.student_id)
+        # Validate Student ID
         if not str(self.student_id).isdigit() or len(str(self.student_id)) != 9:
             QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
             return
 
-        # Validate Phone Number
+        # Validate Phone Number if not empty
         phone = self.inputs["Phone"].text().strip()
-        if not phone.isdigit() or len(phone) != 10:
-            QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits.")
+        if phone and (not phone.isdigit() or len(phone) != 10):
+            QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits or left blank.")
             return
 
-        # Validate Guardian Phone Number
+        # Validate Guardian Phone Number if not empty
         guardian_phone = self.inputs["Guardian Phone"].text().strip()
-        if not guardian_phone.isdigit() or len(guardian_phone) != 10:
-            QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits.")
+        if guardian_phone and (not guardian_phone.isdigit() or len(guardian_phone) != 10):
+            QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits or left blank.")
             return
 
+        # Update all fields
         for field, input_widget in self.inputs.items():
-            db.update_student(self.student_id, FIELD_MAPPING[field], input_widget.text().strip())
+            value = input_widget.text().strip()
+            db.update_student(self.student_id, FIELD_MAPPING[field], value)
+
         QMessageBox.information(self, "Success", "Student details updated!")
         self.accept()
