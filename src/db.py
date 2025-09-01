@@ -1,12 +1,14 @@
 import sqlite3
-
+# Path to the SQLite database file
 DB_NAME = "C:/Users/benny/Documents/GitHub/EquipmentManagement/database/students.db"
 
+# Establishes a connection to the database and returns both the connection and cursor
 def connect_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     return conn, cursor
 
+# Creates the students table if it doesn't exist
 def create_student_table():
     conn, cursor = connect_db()
     cursor.execute('''CREATE TABLE IF NOT EXISTS students (
@@ -34,6 +36,7 @@ def create_student_table():
     conn.close()
 
 #STUDENT FUNCTIONS
+# Adds a new student and conditionally inserts uniform/instrument records
 def add_student(student_id, first_name, last_name, section, phone, email, shako_num, hanger_num,
                 garment_bag, coat_num, pants_num, spats_size, gloves_size, guardian_name, guardian_phone,
                 instrument_name, instrument_serial, instrument_case, year_came_up):
@@ -57,6 +60,7 @@ def add_student(student_id, first_name, last_name, section, phone, email, shako_
         instrument_case if instrument_case not in ("", None) else None,
         year_came_up if year_came_up not in ("", None) else None
     ))
+
     # If any uniform field is filled, add to uniforms table as "not returned"
     if any(x not in ("", None) for x in [shako_num, hanger_num, garment_bag, coat_num, pants_num]):
         cursor.execute('''
@@ -71,7 +75,8 @@ def add_student(student_id, first_name, last_name, section, phone, email, shako_
             pants_num if pants_num not in ("", None) else None
             
         ))
-    # Instrument logic: add to instruments table if any instrument field is filled
+
+    # Instrument logic: same as uniform
     if any(x not in ("", None) for x in [instrument_name, instrument_serial, instrument_case]):
         cursor.execute('''
             INSERT INTO instruments (student_id, instrument_name, instrument_serial, instrument_case, is_checked_in)
@@ -85,6 +90,7 @@ def add_student(student_id, first_name, last_name, section, phone, email, shako_
     conn.commit()
     conn.close()
 
+# Fetches a student by ID
 def get_student_by_id(student_id):
     """Retrieve a single student's details by ID."""
     conn, cursor = connect_db()
@@ -92,6 +98,8 @@ def get_student_by_id(student_id):
     student = cursor.fetchone()
     conn.close()
     return student
+
+# Fetches a student by full name
 def get_student_by_name(first_name, last_name):
     """Retrieve a single student's details by name."""
     conn, cursor = connect_db()
@@ -99,18 +107,24 @@ def get_student_by_name(first_name, last_name):
     student = cursor.fetchone()
     conn.close()
     return student
+
+# Fetches all students with a matching last name (case-insensitive)
 def get_students_by_last_name(last_name):
     conn, cursor = connect_db()
     cursor.execute("SELECT * FROM students WHERE last_name = ? COLLATE NOCASE", (last_name,))
     students = cursor.fetchall()
     conn.close()
     return students
+
+# Fetches all students in a given section
 def get_students_by_section(section):
     conn, cursor = connect_db()
     cursor.execute("SELECT * FROM students WHERE section = ?", (section,))
     students = cursor.fetchall()
     conn.close()
     return students
+
+# Fetches all student records
 def get_students():
     """Fetch all student records."""
     conn, cursor = connect_db()
@@ -119,6 +133,7 @@ def get_students():
     conn.close()
     return students
 
+# Updates a specific field for a student
 def update_student(student_id, field, new_value):
     """Update a student's record safely."""
     conn, cursor = connect_db()
@@ -154,6 +169,7 @@ def update_student(student_id, field, new_value):
     conn.commit()
     conn.close()
 
+# Deletes a student only if they exist
 def delete_student(student_id):
     """Delete a student only if they exist."""
     conn, cursor = connect_db()
@@ -186,6 +202,7 @@ def create_uniform_table():
     conn.commit()
     conn.close()
 
+# Assigns a uniform to a student
 def assign_uniform(student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num):
     conn, cursor = connect_db()
     cursor.execute('''
@@ -194,14 +211,17 @@ def assign_uniform(student_id, shako_num, hanger_num, garment_bag, coat_num, pan
     ''', (student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num))
     conn.commit()
     conn.close()
-
+    
+# Marks a student's uniform as returned and clears their student record fields
 def return_uniform(student_id):
     conn, cursor = connect_db()
+
     # Mark uniform as returned
     cursor.execute('''
         UPDATE uniforms SET is_checked_in = 1
         WHERE student_id = ? AND is_checked_in = 0
     ''', (student_id,))
+
     # Clear uniform fields in students table
     cursor.execute('''
         UPDATE students
@@ -211,6 +231,7 @@ def return_uniform(student_id):
     conn.commit()
     conn.close()
 
+# Fetches all students with their latest uniform and instrument assignments
 def get_students_with_uniforms_and_instruments():
     """
     Fetch all students and their latest assigned uniform and instrument (if any).
@@ -255,6 +276,7 @@ def get_students_with_uniforms_and_instruments():
     conn.close()
     return students
 
+# Fetches students with outstanding uniforms
 def get_students_with_outstanding_uniforms():
     """Get all students with uniforms that are not returned and contain actual data."""
     conn, cursor = connect_db()
@@ -280,6 +302,7 @@ def get_students_with_outstanding_uniforms():
     conn.close()
     return results
 
+# Same as above, but filtered by section
 def get_students_with_outstanding_uniforms_by_section(section):
     conn, cursor = connect_db()
     cursor.execute('''
@@ -305,6 +328,7 @@ def get_students_with_outstanding_uniforms_by_section(section):
     conn.close()
     return results
 
+# Fetches all uniform records
 def get_all_uniforms():
     conn, cursor = connect_db()
     # Fetch all uniforms
@@ -312,6 +336,7 @@ def get_all_uniforms():
     cursor.execute(query)
     return cursor.fetchall()
 
+# Adds a uniform record manually (used for admin or migration)
 def add_uniform(id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, is_checked_in):
     conn, cursor = connect_db()
     cursor.execute(
@@ -348,14 +373,17 @@ def assign_instrument(student_id, instrument_name, instrument_serial, instrument
     conn.commit()
     conn.close()
 
+# Marks instrument as returned and clears student record fields
 def return_instrument(student_id):
     """Mark the latest assigned instrument as returned for a student."""
     conn, cursor = connect_db()
+
     # Mark instrument as returned
     cursor.execute('''
         UPDATE instruments SET is_checked_in = 1
         WHERE student_id = ? AND is_checked_in = 0
     ''', (student_id,))
+
     # Clear instrument fields in students table
     cursor.execute('''
         UPDATE students
@@ -410,8 +438,10 @@ def get_students_with_outstanding_instruments_by_section(section):
     conn.close()
     return results
 
+# Adds an instrument record manually
 def get_all_instruments():
     conn, cursor = connect_db()
+    
     # Fetch all instruments
     query = "SELECT * FROM instruments"
     cursor.execute(query)

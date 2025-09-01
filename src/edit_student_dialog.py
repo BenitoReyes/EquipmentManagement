@@ -1,17 +1,21 @@
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QFormLayout, QMessageBox
 import db
-
+# Define a dialog window for editing an existing student's details
 class EditStudentDialog(QDialog):
     def __init__(self, student_data):
         super().__init__()
 
         self.setWindowTitle("Edit Student Details")
+        # Store the student ID for reference during updates
         self.student_id = student_data[0]  # Assuming ID is at index 0
 
+        # Create a form layout to organize labels and input fields
         layout = QFormLayout()
+
+        # Dictionary to hold QLineEdit widgets keyed by field name
         self.inputs = {}
 
-        # Updated fields list with instrument fields and Year Came up
+        # Define editable fields and their corresponding index in student_data
         fields = [
             ("First Name", 1), ("Last Name", 2), ("Section", 3), ("Phone", 4), ("Email", 5),
             ("Shako #", 6), ("Hanger #", 7), ("Garment Bag", 8), ("Coat #", 9), ("Pants #", 10),
@@ -20,19 +24,27 @@ class EditStudentDialog(QDialog):
             ("Year Came up", 18)
         ]
 
+        # Create input fields and pre-fill them with existing student data
         for field_name, index in fields:
             self.inputs[field_name] = QLineEdit()
+
+            # Populate with existing value or empty string if None
             self.inputs[field_name].setText(str(student_data[index]) if student_data[index] is not None else "")
             layout.addRow(QLabel(field_name + ":"), self.inputs[field_name])
 
+        # Create a submit button and connect it to the update logic
         self.submit_button = QPushButton("Save Changes")
         self.submit_button.clicked.connect(self.update_student)
         layout.addWidget(self.submit_button)
 
+        # Apply the layout to the dialog
         self.setLayout(layout)
 
+    # Method to validate and save updated student details
     def update_student(self):
         """Save updated details with validation."""
+        
+        # Maps display field names to database column names
         FIELD_MAPPING = {
             "First Name": "first_name",
             "Last Name": "last_name",

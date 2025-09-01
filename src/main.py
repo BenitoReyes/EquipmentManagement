@@ -5,7 +5,7 @@ import db
 if __name__ == "__main__":
     db.create_student_table()  # Ensure students table is set up
     db.create_uniform_table()  # Ensure uniforms table is set up
-    db.create_instrument_table()  # <-- Add this line
+    db.create_instrument_table()  #Ensure instruments table is set up
     app = QApplication([])
     window = EquipmentManagementUI()
     window.show()
