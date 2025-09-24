@@ -12,10 +12,10 @@ def resource_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 # Use this if you're bundling the DB (not recommended for persistence)
-# DB_NAME = resource_path("Database/students.db")
+DB_NAME = resource_path("Database/students.db")
 
 # Use this if you're shipping the DB alongside the .exe (recommended)
-DB_NAME = os.path.join(os.path.dirname(sys.executable), "Database", "students.db")
+#DB_NAME = os.path.join(os.path.dirname(sys.executable), "Database", "students.db")
 # Establishes a connection to the database and returns both the connection and cursor
 def connect_db():
     conn = sqlite3.connect(DB_NAME)
