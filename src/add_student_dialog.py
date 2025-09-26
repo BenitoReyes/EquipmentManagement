@@ -1,84 +1,115 @@
+from PyQt6.QtWidgets import (
+    QDialog, QLabel, QLineEdit, QComboBox,
+    QPushButton, QFormLayout, QMessageBox
+)
 import db
-from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QFormLayout, QMessageBox
-# Define a dialog window for adding a new student
+
 class AddStudentDialog(QDialog):
+    """
+    Dialog for adding a new student.
+    Collects:
+      - Student ID (9 digits)
+      - First Name, Last Name
+      - Phone (10 digits, optional)
+      - Email
+      - Year Joined
+      - Status (Student, Former, Alumni)
+      - Guardian Name, Guardian Phone (10 digits, optional)
+      - Section (dropdown)
+    On submit, validates inputs and calls db.add_student().
+    """
+
     def __init__(self):
         super().__init__()
-        # Set window title and dimensions
-        self.setWindowTitle("Add Student")
-        self.setGeometry(300, 300, 400, 500)
+        self.setWindowTitle("Add New Student")
 
-        # Create a form layout to organize labels and input fields
         layout = QFormLayout()
-
-        # Dictionary to store references to each input field
         self.inputs = {}
 
-        # Define all fields to be collected from the user
-        fields = [
-            "Student ID", "First Name", "Last Name", "Section", "Phone", "Email",
-            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
-            "Spats Size", "Gloves Size", "Guardian Name", "Guardian Phone",
-            "Instrument Name", "Instrument Serial", "Instrument Case", "Year Came up"
+        # Create input widgets
+        self.inputs["Student ID"] = QLineEdit()
+        self.inputs["First Name"] = QLineEdit()
+        self.inputs["Last Name"] = QLineEdit()
+        self.inputs["Phone"] = QLineEdit()
+        self.inputs["Email"] = QLineEdit()
+        self.inputs["Year Joined"] = QLineEdit()
+
+        # Status dropdown
+        self.inputs["Status"] = QComboBox()
+        self.inputs["Status"].addItems(["Student", "Former", "Alumni"])
+
+        self.inputs["Guardian Name"] = QLineEdit()
+        self.inputs["Guardian Phone"] = QLineEdit()
+
+        # Section dropdown
+        sections = [
+        "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
+        "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion",
+        "Flags"
         ]
+        self.inputs["Section"] = QComboBox()
+        self.inputs["Section"].addItems(sections)
 
-        # Dynamically create a label and input field for each entry
-        for field in fields:
-            if isinstance(field, tuple):
-                # For instrument fields, add a label without a corresponding input field
-                layout.addRow(QLabel(field[0] + ":"))
-            else:
-                self.inputs[field] = QLineEdit() # Create a text input
-                layout.addRow(QLabel(field + ":"), self.inputs[field]) # Add label and input to layout
 
-        # Create a submit button and connect it to the add_student method
-        self.submit_button = QPushButton("Submit")
-        self.submit_button.clicked.connect(self.add_student)
-        layout.addWidget(self.submit_button) # Add button to layout
+        # Add fields to the form layout
+        for label, widget in self.inputs.items():
+            layout.addRow(QLabel(f"{label}:"), widget)
 
-        # Apply the layout to the dialog
+        # Submit button
+        add_btn = QPushButton("Add Student")
+        add_btn.clicked.connect(self.add_student)
+        layout.addWidget(add_btn)
+
         self.setLayout(layout)
-        
-    # Method triggered when the user clicks "Submit" 
+
     def add_student(self):
-        """Handles adding a student to the database."""
+        """
+        Validate inputs and insert a new student record.
+        Uses db.add_student() with uniform/instrument defaults.
+        """
+        # Retrieve and trim values
+        sid = self.inputs["Student ID"].text().strip()
+        first = self.inputs["First Name"].text().strip()
+        last = self.inputs["Last Name"].text().strip()
+        phone = self.inputs["Phone"].text().strip()
+        email = self.inputs["Email"].text().strip()
+        year = self.inputs["Year Joined"].text().strip()
+        status = self.inputs["Status"].currentText()
+        guardian = self.inputs["Guardian Name"].text().strip()
+        gphone = self.inputs["Guardian Phone"].text().strip()
+        section = self.inputs["Section"].currentText()
 
-        # Extract and sanitize the Student ID
-        student_id = self.inputs["Student ID"].text().strip()
-
-        # Check if the student ID already exists in the database
-        if db.get_student_by_id(student_id):
-            QMessageBox.warning(self, "Error", "A student with that ID already exists!")
-            return  # Do NOT close the dialog
-        
-        # Collect all input values in the same order as defined in the fields list
-        values = [self.inputs[field].text().strip() for field in self.inputs]
-        
-        # Extract specific fields for validation
-        first_name = values[1]
-        last_name = values[2]
-        phone = values[4]
-        guardian_phone = values[14] 
-
-        # Validate Student ID: must be exactly 9 digits
-        if not student_id.isdigit() or len(student_id) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
+        # Validate Student ID
+        if not sid.isdigit() or len(sid) != 9:
+            QMessageBox.warning(self, "Validation Error",
+                                "Student ID must be exactly 9 digits.")
             return
 
-        # Validate Phone Number
+        # Validate required names
+        if not first or not last:
+            QMessageBox.warning(self, "Validation Error",
+                                "First Name and Last Name cannot be blank.")
+            return
+
+        # Validate phone numbers (optional)
         if phone and (not phone.isdigit() or len(phone) != 10):
-            QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits.")
+            QMessageBox.warning(self, "Validation Error",
+                                "Phone must be exactly 10 digits or left blank.")
+            return
+        if gphone and (not gphone.isdigit() or len(gphone) != 10):
+            QMessageBox.warning(self, "Validation Error",
+                                "Guardian Phone must be exactly 10 digits or left blank.")
             return
 
-        # Validate Guardian Phone Number
-        if guardian_phone and(not guardian_phone.isdigit() or len(guardian_phone) != 10):
-            QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits.")
-            return
-        # Ensure required fields are not empty
-        if not first_name or not last_name or not student_id:
-            QMessageBox.warning(self, "Error", "First Name, Last Name, and Student ID are required!")
-            return
-        
-        db.add_student(*values)  # Add to database
-        QMessageBox.information(self, "Success", "Student added successfully!")
-        self.accept()  # Close dialog
+        # Insert student; uniform/instrument fields default to None
+        try:
+            db.add_student(
+                sid, first, last, phone or None, email or None, year or None,
+                status, guardian or None, gphone or None, section
+            )
+            QMessageBox.information(self, "Success",
+                                    f"Student {first} {last} added successfully.")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error",
+                                 f"Failed to add student:\n{e}")
