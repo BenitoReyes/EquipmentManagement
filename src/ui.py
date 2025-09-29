@@ -30,121 +30,109 @@ import sys
 import os
 
 def resource_path(relative_path):
-    """
-    Resolve a path to an embedded resource file, whether running as a script
-    or as a frozen executable (e.g., PyInstaller).
-    """
-    base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
-    return os.path.join(base_path, relative_path)
-
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 def load_stylesheet():
-    path = resource_path("styles.qss")
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
-def desanitize(value):
-    """
-    Convert empty or 'none' strings to None.
-    """
-    return None if not value or value.strip().lower() == "none" else value.strip()
-
-
+    """Load styles.qss from project root if present, otherwise return empty string."""
+    try:
+        p = resource_path('styles.qss')
+        if os.path.exists(p):
+            with open(p, 'r', encoding='utf-8') as fh:
+                return fh.read()
+    except Exception:
+        pass
+    return ""
 class EquipmentManagementUI(QWidget):
-    def show_printable_results(self, title, text):
-        """
-        Show a dialog with the given text, and provide Print, Full Screen, and Close options.
-        """
-        dlg = QDialog(self)
-        dlg.setWindowTitle(title)
-        vbox = QVBoxLayout()
-        text_edit = QTextEdit()
-        text_edit.setReadOnly(True)
-        text_edit.setText(text)
-        vbox.addWidget(text_edit)
-
-        hbox = QHBoxLayout()
-        print_btn = QPushButton("Print")
-        fs_btn = QPushButton("Full Screen")
-        close_btn = QPushButton("Close")
-        hbox.addWidget(print_btn)
-        hbox.addWidget(fs_btn)
-        hbox.addWidget(close_btn)
-        vbox.addLayout(hbox)
-        dlg.setLayout(vbox)
-
-        def on_print():
-            printer = QPrinter()
-            pd = QPrintDialog(printer, dlg)
-            if pd.exec():
-                painter = QPainter(printer)
-                rect = painter.viewport()
-                font = text_edit.font()
-                metrics = QFontMetrics(font)
-                line_height = metrics.lineSpacing()
-                lines = text.split('\n')
-                y = 0
-                for line in lines:
-                    painter.drawText(0, y + line_height, line)
-                    y += line_height
-                painter.end()
-
-        def on_fullscreen():
-            fs = QDialog(self)
-            fs.setWindowTitle(title + " (Full Screen)")
-            box = QVBoxLayout()
-            fs_text = QTextEdit()
-            fs_text.setReadOnly(True)
-            fs_text.setText(text)
-            fs_text.setFont(text_edit.font())
-            box.addWidget(fs_text)
-            fs.setLayout(box)
-            fs.showMaximized()
-            fs.exec()
-
-        print_btn.clicked.connect(on_print)
-        fs_btn.clicked.connect(on_fullscreen)
-        close_btn.clicked.connect(dlg.accept)
-        dlg.exec()
     def use_backup(self):
+        """Restore from a CSV backup where each row starts with a section name.
+
+        Format: section,field1,field2,...
+        Sections: STUDENTS, SHAKOS, COATS, PANTS, BAGS, UNIFORMS, INSTRUMENTS
         """
-        Restore students, uniforms, and instruments from a backup file.
-        """
-        file_path, _ = QFileDialog.getOpenFileName(self, "Restore from Backup", "", "Text Files (*.txt);;All Files (*)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Use Backup", "", "CSV Files (*.csv);;All Files (*)")
         if not file_path:
             return
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                section = None
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
+            counts = {"STUDENTS": 0, "SHAKOS": 0, "COATS": 0, "PANTS": 0, "BAGS": 0, "UNIFORMS": 0, "INSTRUMENTS": 0}
+            with open(file_path, newline='', encoding='utf-8') as fh:
+                reader = csv.reader(fh)
+                for row in reader:
+                    if not row:
                         continue
-                    if line.startswith("[STUDENTS]"):
-                        section = "students"
-                        continue
-                    elif line.startswith("[UNIFORMS]"):
-                        section = "uniforms"
-                        continue
-                    elif line.startswith("[INSTRUMENTS]"):
-                        section = "instruments"
-                        continue
-                    if section == "students":
-                        # Format: student_id,first_name,last_name,status,section,phone,email,guardian_name,guardian_phone,year_came_up
-                        parts = line.split(",")
-                        if len(parts) >= 10:
-                            db.add_or_update_student(*[p.strip() for p in parts[:10]])
-                    elif section == "uniforms":
-                        # Format: id,student_id,shako_num,hanger_num,garment_bag,coat_num,pants_num,status,is_checked_in,notes
-                        parts = line.split(",")
-                        if len(parts) >= 10:
-                            db.add_or_update_uniform(*[p.strip() for p in parts[:10]])
-                    elif section == "instruments":
-                        # Format: id,student_id,name,serial,case,model,condition,status,is_checked_in,notes
-                        parts = line.split(",")
-                        if len(parts) >= 10:
-                            db.add_or_update_instrument(*[p.strip() for p in parts[:10]])
+                    section = row[0].strip().upper()
+                    parts = [p if p != '' else None for p in row[1:]]
+                    # pad parts to at least 10 fields to avoid index errors
+                    while len(parts) < 10:
+                        parts.append(None)
+                    try:
+                        if section == 'STUDENTS':
+                            # students order: student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section
+                            sid = parts[0]
+                            if sid and sid.isdigit() and len(sid) == 9:
+                                inserted = db.add_or_update_student(
+                                    sid, parts[1], parts[2], parts[6], parts[9], parts[3], parts[4], parts[7], parts[8], parts[5]
+                                )
+                                counts['STUDENTS'] += 1
+                        elif section == 'UNIFORMS':
+                            _id = None
+                            try:
+                                _id = int(parts[0]) if parts[0] is not None else None
+                            except Exception:
+                                _id = None
+                            # call upsert helper (it will insert or update)
+                            db.add_or_update_uniform(_id, parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9])
+                            counts['UNIFORMS'] += 1
+                        elif section == 'INSTRUMENTS':
+                            _id = None
+                            try:
+                                _id = int(parts[0]) if parts[0] is not None else None
+                            except Exception:
+                                _id = None
+                            db.add_or_update_instrument(_id, parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9])
+                            counts['INSTRUMENTS'] += 1
+                        elif section == 'SHAKOS':
+                            conn2, cur2 = db.connect_db()
+                            cur2.execute('SELECT 1 FROM shakos WHERE id = ?', (parts[0],))
+                            if cur2.fetchone():
+                                cur2.execute('UPDATE shakos SET shako_num=?, status=?, student_id=?, notes=? WHERE id=?', (parts[1], parts[2], parts[3], parts[4], parts[0]))
+                            else:
+                                cur2.execute('INSERT INTO shakos (id, shako_num, status, student_id, notes) VALUES (?, ?, ?, ?, ?)', (parts[0], parts[1], parts[2], parts[3], parts[4]))
+                            conn2.commit(); conn2.close()
+                            counts['SHAKOS'] += 1
+                        elif section == 'COATS':
+                            conn2, cur2 = db.connect_db()
+                            cur2.execute('SELECT 1 FROM coats WHERE id = ?', (parts[0],))
+                            if cur2.fetchone():
+                                cur2.execute('UPDATE coats SET coat_num=?, hanger_num=?, status=?, student_id=?, notes=? WHERE id=?', (parts[1], parts[2], parts[3], parts[4], parts[5], parts[0]))
+                            else:
+                                cur2.execute('INSERT INTO coats (id, coat_num, hanger_num, status, student_id, notes) VALUES (?, ?, ?, ?, ?, ?)', (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]))
+                            conn2.commit(); conn2.close()
+                            counts['COATS'] += 1
+                        elif section == 'PANTS':
+                            conn2, cur2 = db.connect_db()
+                            cur2.execute('SELECT 1 FROM pants WHERE id = ?', (parts[0],))
+                            if cur2.fetchone():
+                                cur2.execute('UPDATE pants SET pants_num=?, status=?, student_id=?, notes=? WHERE id=?', (parts[1], parts[2], parts[3], parts[4], parts[0]))
+                            else:
+                                cur2.execute('INSERT INTO pants (id, pants_num, status, student_id, notes) VALUES (?, ?, ?, ?, ?)', (parts[0], parts[1], parts[2], parts[3], parts[4]))
+                            conn2.commit(); conn2.close()
+                            counts['PANTS'] += 1
+                        elif section == 'BAGS':
+                            conn2, cur2 = db.connect_db()
+                            cur2.execute('SELECT 1 FROM garment_bags WHERE id = ?', (parts[0],))
+                            if cur2.fetchone():
+                                cur2.execute('UPDATE garment_bags SET bag_num=?, status=?, student_id=?, notes=? WHERE id=?', (parts[1], parts[2], parts[3], parts[4], parts[0]))
+                            else:
+                                cur2.execute('INSERT INTO garment_bags (id, bag_num, status, student_id, notes) VALUES (?, ?, ?, ?, ?)', (parts[0], parts[1], parts[2], parts[3], parts[4]))
+                            conn2.commit(); conn2.close()
+                            counts['BAGS'] += 1
+                    except Exception as e:
+                        print('Restore line failed', section, row, e)
             self.refresh_table()
-            QMessageBox.information(self, "Restore Complete", "Backup restored successfully.")
+            # Build a small summary of restored counts
+            summary = "\n".join(f"{k}: {v}" for k, v in counts.items())
+            QMessageBox.information(self, "Restore Complete", f"Backup restored successfully.\n\nRestored:\n{summary}")
         except Exception as e:
             QMessageBox.warning(self, "Restore Failed", f"Error: {e}")
     def import_students_from_csv(self):
@@ -156,29 +144,56 @@ class EquipmentManagementUI(QWidget):
             return
         count_added = 0
         count_updated = 0
+        # Support two CSV formats:
+        # 1) Backup-style where each row begins with a section token (STUDENTS,...)
+        # 2) Plain CSV with headers (student_id, first_name, ...)
         with open(file_path, newline='', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                sid = row.get('student_id') or row.get('Student ID') or row.get('ID')
-                if not sid or not sid.isdigit() or len(sid) != 9:
-                    continue
-                # Prepare fields (adjust as needed for your schema)
-                student_data = {
-                    'student_id': sid,
-                    'first_name': row.get('first_name') or row.get('First Name') or '',
-                    'last_name': row.get('last_name') or row.get('Last Name') or '',
-                    'status': row.get('status') or row.get('Status') or '',
-                    'section': row.get('section') or row.get('Section') or '',
-                    'phone': row.get('phone') or row.get('Phone') or '',
-                    'email': row.get('email') or row.get('Email') or '',
-                    'guardian_name': row.get('guardian_name') or row.get('Guardian Name') or '',
-                    'guardian_phone': row.get('guardian_phone') or row.get('Guardian Phone') or '',
-                    'year_came_up': row.get('year_came_up') or row.get('Year Came Up') or '',
-                }
-                # Check if student exists
-                existing = db.get_student_by_id(sid)
-                if existing:
-                    db.update_student(
+            # Peek first few bytes to decide format
+            first = csvfile.read(1024)
+            csvfile.seek(0)
+            # If file appears to use section-prefixed rows, parse as simple reader
+            if first.lstrip().upper().startswith('STUDENTS') or ',STUDENTS' in first.upper():
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if not row:
+                        continue
+                    if row[0].strip().upper() != 'STUDENTS':
+                        continue
+                    parts = [p if p != '' else None for p in row[1:]]
+                    # Expect same ordering as students table: student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section
+                    if len(parts) < 10:
+                        continue
+                    sid = parts[0]
+                    if not sid or not sid.isdigit() or len(sid) != 9:
+                        continue
+                    inserted = db.add_or_update_student(
+                        sid, parts[1], parts[2], parts[6], parts[9], parts[3], parts[4], parts[7], parts[8], parts[5]
+                    )
+                    if inserted:
+                        count_added += 1
+                    else:
+                        count_updated += 1
+            else:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    sid = row.get('student_id') or row.get('Student ID') or row.get('ID')
+                    if not sid or not sid.isdigit() or len(sid) != 9:
+                        continue
+                    # Prepare fields (adjust as needed for your schema)
+                    student_data = {
+                        'student_id': sid,
+                        'first_name': row.get('first_name') or row.get('First Name') or '',
+                        'last_name': row.get('last_name') or row.get('Last Name') or '',
+                        'status': row.get('status') or row.get('Status') or '',
+                        'section': row.get('section') or row.get('Section') or '',
+                        'phone': row.get('phone') or row.get('Phone') or '',
+                        'email': row.get('email') or row.get('Email') or '',
+                        'guardian_name': row.get('guardian_name') or row.get('Guardian Name') or '',
+                        'guardian_phone': row.get('guardian_phone') or row.get('Guardian Phone') or '',
+                        'year_came_up': row.get('year_came_up') or row.get('Year Came Up') or '',
+                    }
+                    # Use add_or_update_student to overwrite or insert
+                    inserted = db.add_or_update_student(
                         sid,
                         student_data['first_name'],
                         student_data['last_name'],
@@ -190,21 +205,10 @@ class EquipmentManagementUI(QWidget):
                         student_data['guardian_phone'],
                         student_data['year_came_up']
                     )
-                    count_updated += 1
-                else:
-                    db.add_student(
-                        sid,
-                        student_data['first_name'],
-                        student_data['last_name'],
-                        student_data['status'],
-                        student_data['section'],
-                        student_data['phone'],
-                        student_data['email'],
-                        student_data['guardian_name'],
-                        student_data['guardian_phone'],
-                        student_data['year_came_up']
-                    )
-                    count_added += 1
+                    if inserted:
+                        count_added += 1
+                    else:
+                        count_updated += 1
         self.refresh_table()
         QMessageBox.information(self, "Import Complete", f"Added: {count_added}\nUpdated: {count_updated}")
     def __init__(self):
@@ -777,6 +781,34 @@ class EquipmentManagementUI(QWidget):
     def sanitize(self, value):
         return "" if value is None or str(value).strip().lower() == "none" else str(value)
 
+    def show_printable_results(self, title, text):
+        """Show a printable dialog with text and a Print button."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        v = QVBoxLayout()
+        te = QTextEdit()
+        te.setReadOnly(True)
+        te.setPlainText(text)
+        v.addWidget(te)
+        h = QHBoxLayout()
+        print_btn = QPushButton("Print")
+        close_btn = QPushButton("Close")
+        h.addWidget(print_btn)
+        h.addWidget(close_btn)
+        v.addLayout(h)
+        dlg.setLayout(v)
+
+        def do_print():
+            doc = te.document()
+            printer = QPrinter()
+            pd = QPrintDialog(printer, dlg)
+            if pd.exec():
+                doc.print(printer)
+
+        print_btn.clicked.connect(do_print)
+        close_btn.clicked.connect(dlg.accept)
+        dlg.exec()
+
     # --------------------------------------------------------------------------
     # Table view methods
     # --------------------------------------------------------------------------
@@ -786,8 +818,8 @@ class EquipmentManagementUI(QWidget):
         Show the main students view with joined uniform/instrument data.
         """
         headers = [
-            "Student ID", "Last Name", "First Name", "Status", "Section",
-            "Phone", "Email", "Guardian Name", "Guardian Phone", "Year Came Up",
+            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
+            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
             "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
             "Instrument Name", "Instrument Serial", "Instrument Case"
         ]
@@ -864,7 +896,7 @@ class EquipmentManagementUI(QWidget):
         self.student_table.setVerticalHeaderLabels(["" for _ in range(self.student_table.rowCount())])
 
     def find_instrument_popup(self):
-        dlg = AddInstrumentDialog(self, find_mode=True)
+        dlg = AddInstrumentDialog(self, find_mode=True, sections=self.sections)
         if not dlg.exec():
             return
         q = dlg.get_instrument_data()
@@ -1166,13 +1198,30 @@ class EquipmentManagementUI(QWidget):
 
     def _view_single_student(self, stu, dialog):
         headers = [
-            "Student ID", "First Name", "Last Name", "Status", "Section",
-            "Phone", "Email", "Guardian Name", "Guardian Phone", "Year Came Up",
+            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
+            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
             "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
             "Instrument Name", "Instrument Serial", "Instrument Case"
         ]
+        # stu may be a full row from get_students_with_uniforms_and_instruments or a simple students row.
+        # Normalize into a list with expected length, filling missing fields by checking latest assignments.
+        vals = list(stu)
+        # If students-only row, fetch latest uniform/instrument for this student
+        if len(vals) < len(headers):
+            sid = vals[0]
+            # attempt to find latest uniform and instrument assignments
+            u = db.get_students_with_uniforms_and_instruments()
+            matched = [r for r in u if r[0] == sid]
+            if matched:
+                row = list(matched[0])
+                # matched row layout after DB change: student_id, first_name, last_name, status, phone, email, guardian_name, guardian_phone, year_came_up, section, shako, hanger, bag, coat, pants, instr_name, instr_serial, instr_case
+                vals = row
+            else:
+                # pad to expected length
+                vals = vals + [None] * (len(headers) - len(vals))
+
         info = "\n".join(
-            f"{headers[i]}: {stu[i] if stu[i] is not None else ''}"
+            f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
             for i in range(len(headers))
         )
         self.show_printable_results("Student Info", info)
@@ -1186,15 +1235,41 @@ class EquipmentManagementUI(QWidget):
 
     def _view_section_students(self, students, section, dialog):
         headers = [
-            "Student ID", "First Name", "Last Name", "Status", "Section",
-            "Phone", "Email", "Guardian Name", "Guardian Phone", "Year Came Up",
+            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
+            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
             "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
             "Instrument Name", "Instrument Serial", "Instrument Case"
         ]
         info = ""
+        # Normalize each student row to the joined layout used elsewhere
+        joined_rows = db.get_students_with_uniforms_and_instruments()
         for stu in students:
+            vals = list(stu)
+            if len(vals) < len(headers):
+                sid = vals[0]
+                matched = [r for r in joined_rows if r[0] == sid]
+                if matched:
+                    vals = list(matched[0])
+                else:
+                    # Convert student-only order to joined order. students table order:
+                    # student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section
+                    # joined order after DB change: student_id, first_name, last_name, status, phone, email, guardian_name, guardian_phone, year_came_up, section
+                    vals = [
+                        stu[0],  # student_id
+                        stu[1],  # first_name
+                        stu[2],  # last_name
+                        stu[6] if len(stu) > 6 else None,  # status
+                        stu[3] if len(stu) > 3 else None,  # phone
+                        stu[4] if len(stu) > 4 else None,  # email
+                        stu[7] if len(stu) > 7 else None,  # guardian_name
+                        stu[8] if len(stu) > 8 else None,  # guardian_phone
+                        stu[5] if len(stu) > 5 else None,  # year_came_up
+                        stu[9] if len(stu) > 9 else None,  # section
+                    ]
+                    # pad uniform/instrument fields
+                    vals += [None] * (len(headers) - len(vals))
             block = "\n".join(
-                f"{headers[i]}: {stu[i] if stu[i] is not None else ''}"
+                f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
                 for i in range(len(headers))
             )
             info += block + "\n" + "-" * 40 + "\n"
@@ -1261,8 +1336,7 @@ class EquipmentManagementUI(QWidget):
         sid_in.setPlaceholderText("Student ID (9 digits)")
         shako_in = QLineEdit()
         shako_in.setPlaceholderText("Shako # (blank if not assigning)")
-        hanger_in = QLineEdit()
-        hanger_in.setPlaceholderText("Hanger # (blank if not assigning)")
+        # hanger is derived from coat; no separate hanger input
         bag_in = QLineEdit()
         bag_in.setPlaceholderText("Garment Bag (blank if not assigning)")
         coat_in = QLineEdit()
@@ -1272,7 +1346,6 @@ class EquipmentManagementUI(QWidget):
         v.addWidget(QLabel("Enter Student ID and any uniform parts to assign (leave blank for unassigned):"))
         v.addWidget(sid_in)
         v.addWidget(shako_in)
-        v.addWidget(hanger_in)
         v.addWidget(bag_in)
         v.addWidget(coat_in)
         v.addWidget(pants_in)
@@ -1293,13 +1366,14 @@ class EquipmentManagementUI(QWidget):
                 QMessageBox.warning(self, "Error", "No student found.")
                 return
             shako = shako_in.text().strip()
-            hanger = hanger_in.text().strip()
+            # hanger is not provided separately; derive from coat if needed
+            hanger = None
             bag = bag_in.text().strip()
             coat = coat_in.text().strip()
             pants = pants_in.text().strip()
             # Convert to int where needed, or None
             shako_num = int(shako) if shako else None
-            hanger_num = int(hanger) if hanger else None
+            hanger_num = None
             coat_num = int(coat) if coat else None
             pants_num = int(pants) if pants else None
             bag_val = bag if bag else None
@@ -1312,10 +1386,17 @@ class EquipmentManagementUI(QWidget):
                 elif not db.is_shako_available(shako_num):
                     not_available.append(f"Shako #{shako_num}")
             if coat_num is not None:
-                if not db.find_coat_by_number(coat_num):
+                coat_row = db.find_coat_by_number(coat_num)
+                if not coat_row:
                     missing.append(f"Coat #{coat_num}")
                 elif not db.is_coat_available(coat_num):
                     not_available.append(f"Coat #{coat_num}")
+                else:
+                    # derive hanger number from coat record when assigning
+                    try:
+                        hanger_num = int(coat_row[2]) if coat_row and coat_row[2] is not None else None
+                    except Exception:
+                        hanger_num = None
             if pants_num is not None:
                 if not db.find_pants_by_number(pants_num):
                     missing.append(f"Pants #{pants_num}")
@@ -1414,15 +1495,15 @@ class EquipmentManagementUI(QWidget):
         """
         Open dialog to add a new instrument without assigning to a student.
         """
-        dialog = AddInstrumentDialog(self)
+        dialog = AddInstrumentDialog(self, sections=self.sections)
         if dialog.exec():
             instrument_data = dialog.get_instrument_data()
             conn, cursor = db.connect_db()
             cursor.execute('''
                 INSERT INTO instruments (
                     instrument_name, instrument_serial, instrument_case,
-                    model, condition, status, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    model, condition, status, notes, instrument_section
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 instrument_data['instrument_name'],
                 instrument_data['instrument_serial'],
@@ -1430,7 +1511,8 @@ class EquipmentManagementUI(QWidget):
                 instrument_data['model'],
                 instrument_data['condition'],
                 instrument_data['status'],
-                instrument_data['notes']
+                instrument_data['notes'],
+                instrument_data.get('instrument_section')
             ))
             conn.commit()
             conn.close()
@@ -1518,12 +1600,16 @@ class EquipmentManagementUI(QWidget):
         else:
             inst = available[0]
             # Confirm case
+            # Confirm case (optional)
             case, ok3 = QInputDialog.getText(self, "Assign Instrument", "Case:", text=str(inst[4] or ''))
-            if not ok3 or not case.strip():
+            if not ok3:
                 return
-            # Mark as assigned
+            # Mark as assigned; update case only if provided
             conn, cursor = db.connect_db()
-            cursor.execute("UPDATE instruments SET status='Assigned', student_id=?, is_checked_in=0 WHERE id=?", (sid, inst[0]))
+            if case and case.strip():
+                cursor.execute("UPDATE instruments SET status='Assigned', student_id=?, is_checked_in=0, instrument_case=? WHERE id= ?", (sid, case.strip(), inst[0]))
+            else:
+                cursor.execute("UPDATE instruments SET status='Assigned', student_id=?, is_checked_in=0 WHERE id=?", (sid, inst[0]))
             conn.commit()
             conn.close()
             QMessageBox.information(self, "Success", f"Instrument ID {inst[0]} assigned.")
@@ -1548,10 +1634,10 @@ class EquipmentManagementUI(QWidget):
         """
         Display all not-returned instruments, optionally filtered by section.
         """
-        sec, ok = QInputDialog.getText(self, "Outstanding Instruments",
-                                    "Enter section to filter (leave blank for all):")
-        if ok and sec.strip():
-            rows = db.get_students_with_outstanding_instruments_by_section(sec.strip())
+        opts = ["<All>"] + self.sections
+        section, ok = QInputDialog.getItem(self, "Outstanding Instruments", "Filter by section:", opts, 0, False)
+        if ok and section != "<All>":
+            rows = db.get_students_with_outstanding_instruments_by_section(section)
         else:
             rows = db.get_students_with_outstanding_instruments()
 
@@ -1570,11 +1656,37 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
 
     def create_backup(self):
-        """
-        Save all students, uniforms, and instruments to a text file.
-        Each line is prefixed with section name for easy parsing.
-        """
-        # (fixed version above)
+        """Create a CSV backup where each row begins with the section name."""
+        file_path, _ = QFileDialog.getSaveFileName(self, "Create Backup", "backup.csv", "CSV Files (*.csv);;All Files (*)")
+        if not file_path:
+            return
+        try:
+            with open(file_path, 'w', newline='', encoding='utf-8') as fh:
+                writer = csv.writer(fh)
+                # Students
+                for s in db.get_students():
+                    writer.writerow(['STUDENTS'] + [x if x is not None else '' for x in s])
+                # Shakos
+                for r in db.get_all_shakos():
+                    writer.writerow(['SHAKOS'] + [x if x is not None else '' for x in r])
+                # Coats
+                for r in db.get_all_coats():
+                    writer.writerow(['COATS'] + [x if x is not None else '' for x in r])
+                # Pants
+                for r in db.get_all_pants():
+                    writer.writerow(['PANTS'] + [x if x is not None else '' for x in r])
+                # Bags
+                for r in db.get_all_garment_bags():
+                    writer.writerow(['BAGS'] + [x if x is not None else '' for x in r])
+                # Uniforms
+                for u in db.get_all_uniforms():
+                    writer.writerow(['UNIFORMS'] + [x if x is not None else '' for x in u])
+                # Instruments
+                for ins in db.get_all_instruments():
+                    writer.writerow(['INSTRUMENTS'] + [x if x is not None else '' for x in ins])
+            QMessageBox.information(self, "Backup", "CSV backup saved.")
+        except Exception as e:
+            QMessageBox.warning(self, "Backup Failed", f"Error: {e}")
 
     def student_to_code_popup(self):
         """

@@ -3,9 +3,10 @@ from PyQt6.QtCore import Qt
 from db import connect_db
 
 class AddInstrumentDialog(QDialog):
-    def __init__(self, parent=None, find_mode=False):
+    def __init__(self, parent=None, find_mode=False, sections=None):
         super().__init__(parent)
         self.find_mode = find_mode
+        self.sections = sections or []
         self.setWindowTitle("Find Instrument" if find_mode else "Add New Instrument")
         self.setup_ui()
 
@@ -61,6 +62,17 @@ class AddInstrumentDialog(QDialog):
         notes_layout.addWidget(self.notes_input)
         layout.addLayout(notes_layout)
 
+        # Section
+        section_layout = QHBoxLayout()
+        section_label = QLabel("Section:")
+        self.section_combo = QComboBox()
+        self.section_combo.addItem("")
+        if self.sections:
+            self.section_combo.addItems(self.sections)
+        section_layout.addWidget(section_label)
+        section_layout.addWidget(self.section_combo)
+        layout.addLayout(section_layout)
+
         # Buttons
         button_layout = QHBoxLayout()
         self.save_button = QPushButton("Find" if self.find_mode else "Save")
@@ -82,6 +94,7 @@ class AddInstrumentDialog(QDialog):
             'instrument_case': None if not self.case_input.text().strip() else self.case_input.text().strip(),
             'model': None if not self.model_input.text().strip() else self.model_input.text().strip(),
             'condition': None if not self.condition_combo.currentText() else self.condition_combo.currentText(),
+            'instrument_section': None if not self.section_combo.currentText().strip() else self.section_combo.currentText().strip(),
             'status': 'Available',
             'notes': None if not self.notes_input.text().strip() else self.notes_input.text().strip()
         }

@@ -262,6 +262,58 @@ def create_uniform_table():
     conn.commit()
     conn.close()
 
+def add_or_update_student(student_id, first_name, last_name, status, section, phone, email, guardian_name, guardian_phone, year_came_up):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT 1 FROM students WHERE student_id = ?", (student_id,))
+    exists = cursor.fetchone() is not None
+    if exists:
+        cursor.execute('''
+            UPDATE students SET first_name=?, last_name=?, status=?, section=?, phone=?, email=?, guardian_name=?, guardian_phone=?, year_came_up=? WHERE student_id=?
+        ''', (first_name, last_name, status, section, phone, email, guardian_name, guardian_phone, year_came_up, student_id))
+    else:
+        cursor.execute('''
+            INSERT INTO students (student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section))
+    conn.commit()
+    conn.close()
+    # Return True if a new row was inserted, False if updated
+    return not exists
+
+def add_or_update_uniform(id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, status, is_checked_in, notes):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT 1 FROM uniforms WHERE id = ?", (id,))
+    exists = cursor.fetchone() is not None
+    if exists:
+        cursor.execute('''
+            UPDATE uniforms SET student_id=?, shako_num=?, hanger_num=?, garment_bag=?, coat_num=?, pants_num=?, status=?, is_checked_in=?, notes=? WHERE id=?
+        ''', (student_id or None, shako_num or None, hanger_num or None, garment_bag or None, coat_num or None, pants_num or None, status or None, int(is_checked_in) if is_checked_in not in (None, '') else 1, notes or None, id))
+    else:
+        cursor.execute('''
+            INSERT INTO uniforms (id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num, status, is_checked_in, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (id, student_id or None, shako_num or None, hanger_num or None, garment_bag or None, coat_num or None, pants_num or None, status or None, int(is_checked_in) if is_checked_in not in (None, '') else 1, notes or None))
+    conn.commit()
+    conn.close()
+    return not exists
+
+def add_or_update_instrument(id, student_id, name, serial, case, model, condition, status, is_checked_in, notes):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT 1 FROM instruments WHERE id = ?", (id,))
+    exists = cursor.fetchone() is not None
+    if exists:
+        cursor.execute('''
+            UPDATE instruments SET student_id=?, instrument_name=?, instrument_serial=?, instrument_case=?, model=?, condition=?, status=?, is_checked_in=?, notes=? WHERE id=?
+        ''', (student_id or None, name or None, serial or None, case or None, model or None, condition or None, status or None, int(is_checked_in) if is_checked_in not in (None, '') else 1, notes or None, id))
+    else:
+        cursor.execute('''
+            INSERT INTO instruments (id, student_id, instrument_name, instrument_serial, instrument_case, model, condition, status, is_checked_in, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (id, student_id or None, name or None, serial or None, case or None, model or None, condition or None, status or None, int(is_checked_in) if is_checked_in not in (None, '') else 1, notes or None))
+    conn.commit()
+    conn.close()
+    return not exists
+
 def create_instrument_table():
     """
     Creates the 'instruments' table if it doesn't exist.
@@ -273,6 +325,7 @@ def create_instrument_table():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id TEXT NULL,
             instrument_name TEXT,
+            instrument_section TEXT,
             instrument_serial TEXT,
             instrument_case TEXT,
             model TEXT,
@@ -284,6 +337,18 @@ def create_instrument_table():
         )
     ''')
     conn.commit()
+    conn.close()
+    # Ensure instrument_section column exists for older DBs
+    conn, cursor = connect_db()
+    cursor.execute("PRAGMA table_info(instruments)")
+    cols = [r[1] for r in cursor.fetchall()]
+    if 'instrument_section' not in cols:
+        try:
+            cursor.execute("ALTER TABLE instruments ADD COLUMN instrument_section TEXT")
+            conn.commit()
+        except Exception:
+            # If alter fails for any reason, ignore; app can continue without section
+            pass
     conn.close()
 
 # ------------------------------------------------------------------------------
@@ -450,6 +515,20 @@ def delete_student(student_id):
         print("Error: Student ID not found.")
         conn.close()
         return
+    # Before deleting the student, unassign any related equipment:
+    try:
+        # Unassign uniforms: set student_id NULL, mark checked in and available
+        cursor.execute("UPDATE uniforms SET student_id = NULL, is_checked_in = 1, status = 'Available' WHERE student_id = ?", (student_id,))
+        # Unassign instruments
+        cursor.execute("UPDATE instruments SET student_id = NULL, is_checked_in = 1, status = 'Available' WHERE student_id = ?", (student_id,))
+        # Unassign component parts (shakos, coats, pants, garment_bags)
+        cursor.execute("UPDATE shakos SET student_id = NULL, status = 'Available' WHERE student_id = ?", (student_id,))
+        cursor.execute("UPDATE coats SET student_id = NULL, status = 'Available' WHERE student_id = ?", (student_id,))
+        cursor.execute("UPDATE pants SET student_id = NULL, status = 'Available' WHERE student_id = ?", (student_id,))
+        cursor.execute("UPDATE garment_bags SET student_id = NULL, status = 'Available' WHERE student_id = ?", (student_id,))
+    except Exception:
+        # best-effort: ignore failures and continue to delete student
+        pass
 
     cursor.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
     conn.commit()
@@ -643,9 +722,8 @@ def get_students_with_uniforms_and_instruments():
     conn, cursor = connect_db()
     cursor.execute('''
         SELECT
-            s.student_id, s.first_name, s.last_name, s.section,
-            s.phone, s.email, s.status,
-            s.guardian_name, s.guardian_phone, s.year_came_up,
+            s.student_id, s.first_name, s.last_name, s.status,
+            s.phone, s.email, s.guardian_name, s.guardian_phone, s.year_came_up, s.section,
             u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
             i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
