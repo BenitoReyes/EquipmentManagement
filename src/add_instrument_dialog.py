@@ -1,27 +1,48 @@
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox)
+# Import necessary PyQt6 widgets and layout classes
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
+)
 from PyQt6.QtCore import Qt
+
+# Import database connection utility (not used directly here, but may be useful later)
 from db import connect_db
 
+# Define a dialog window for adding or searching for an instrument
 class AddInstrumentDialog(QDialog):
-    def __init__(self, parent=None, find_mode=False, sections=None):
+    def __init__(self, parent=None, find_mode=False, instruments=None):
         super().__init__(parent)
+
+        # If True, this dialog is used to search for instruments instead of adding them
         self.find_mode = find_mode
-        self.sections = sections or []
+
+        # List of valid instrument sections (e.g., Trumpet, Percussion, Flags)
+        self.instruments = instruments or []
+
+        # Set the window title based on mode
         self.setWindowTitle("Find Instrument" if find_mode else "Add New Instrument")
-        self.setup_ui()
+
+        # Build the UI layout and widgets
+        if(self.find_mode== False):
+            self.setup_ui()
+        else:
+            self.setup_ui_find()
 
     def setup_ui(self):
+        # Main vertical layout for stacking all input rows
         layout = QVBoxLayout()
 
-        # Instrument Name
-        name_layout = QHBoxLayout()
-        name_label = QLabel("Instrument Name:")
-        self.name_input = QLineEdit()
-        name_layout.addWidget(name_label)
-        name_layout.addWidget(self.name_input)
-        layout.addLayout(name_layout)
+        # --- Instrument Name ---
+        instruments_layout = QHBoxLayout()
+        instruments_label = QLabel("Instrument:")
+        self.instruments_combo = QComboBox()
+        self.instruments_combo.addItem("")  # Blank option for optional selection
+        if self.instruments:
+            self.instruments_combo.addItems(self.instruments)  # Populate with provided section list
+        instruments_layout.addWidget(instruments_label)
+        instruments_layout.addWidget(self.instruments_combo)
+        layout.addLayout(instruments_layout)
 
-        # Serial Number
+        # --- Serial Number ---
         serial_layout = QHBoxLayout()
         serial_label = QLabel("Serial Number:")
         self.serial_input = QLineEdit()
@@ -29,7 +50,7 @@ class AddInstrumentDialog(QDialog):
         serial_layout.addWidget(self.serial_input)
         layout.addLayout(serial_layout)
 
-        # Case Number
+        # --- Case Number ---
         case_layout = QHBoxLayout()
         case_label = QLabel("Case Number:")
         self.case_input = QLineEdit()
@@ -37,7 +58,7 @@ class AddInstrumentDialog(QDialog):
         case_layout.addWidget(self.case_input)
         layout.addLayout(case_layout)
 
-        # Model
+        # --- Model ---
         model_layout = QHBoxLayout()
         model_label = QLabel("Model:")
         self.model_input = QLineEdit()
@@ -45,16 +66,17 @@ class AddInstrumentDialog(QDialog):
         model_layout.addWidget(self.model_input)
         layout.addLayout(model_layout)
 
-        # Condition
+        # --- Condition Dropdown ---
         condition_layout = QHBoxLayout()
         condition_label = QLabel("Condition:")
         self.condition_combo = QComboBox()
+        # Predefined condition options
         self.condition_combo.addItems(['Excellent', 'Good', 'Fair', 'Poor'])
         condition_layout.addWidget(condition_label)
         condition_layout.addWidget(self.condition_combo)
         layout.addLayout(condition_layout)
 
-        # Notes
+        # --- Notes ---
         notes_layout = QHBoxLayout()
         notes_label = QLabel("Notes:")
         self.notes_input = QLineEdit()
@@ -62,39 +84,76 @@ class AddInstrumentDialog(QDialog):
         notes_layout.addWidget(self.notes_input)
         layout.addLayout(notes_layout)
 
-        # Section
-        section_layout = QHBoxLayout()
-        section_label = QLabel("Section:")
-        self.section_combo = QComboBox()
-        self.section_combo.addItem("")
-        if self.sections:
-            self.section_combo.addItems(self.sections)
-        section_layout.addWidget(section_label)
-        section_layout.addWidget(self.section_combo)
-        layout.addLayout(section_layout)
-
-        # Buttons
+        # --- Save/Cancel Buttons ---
         button_layout = QHBoxLayout()
+        # Button text changes depending on mode
         self.save_button = QPushButton("Find" if self.find_mode else "Save")
         self.cancel_button = QPushButton("Cancel")
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.cancel_button)
         layout.addLayout(button_layout)
 
+        # Apply the layout to the dialog window
         self.setLayout(layout)
 
-        # Connect buttons
-        self.save_button.clicked.connect(self.accept)
-        self.cancel_button.clicked.connect(self.reject)
+        # Connect button actions to dialog behavior
+        self.save_button.clicked.connect(self.accept)   # Accept closes dialog with success
+        self.cancel_button.clicked.connect(self.reject) # Reject closes dialog without saving
+
+    def setup_ui_find(self):
+        # Main vertical layout for stacking all input rows
+        layout = QVBoxLayout()
+
+        # --- Serial Number ---
+        serial_layout = QHBoxLayout()
+        serial_label = QLabel("Serial Number:")
+        self.serial_input = QLineEdit()
+        serial_layout.addWidget(serial_label)
+        serial_layout.addWidget(self.serial_input)
+        layout.addLayout(serial_layout)
+
+        # --- Instrument Name ---
+        instruments_layout = QHBoxLayout()
+        instruments_label = QLabel("Instrument:")
+        self.instruments_combo = QComboBox()
+        self.instruments_combo.addItem("")  # Blank option for optional selection
+        if self.instruments:
+            self.instruments_combo.addItems(self.instruments)  # Populate with provided section list
+        instruments_layout.addWidget(instruments_label)
+        instruments_layout.addWidget(self.instruments_combo)
+        layout.addLayout(instruments_layout)
+        # --- Empty inputs for other fields for formatting purposes---
+        self.case_input = QLineEdit()
+        self.model_input = QLineEdit()
+        self.condition_combo = QComboBox()
+        self.notes_input = QLineEdit()
+        # --- Save/Cancel Buttons ---
+        button_layout = QHBoxLayout()
+        # Button text changes depending on mode
+        self.save_button = QPushButton("Find" if self.find_mode else "Save")
+        self.cancel_button = QPushButton("Cancel")
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.cancel_button)
+        layout.addLayout(button_layout)
+
+        # Apply the layout to the dialog window
+        self.setLayout(layout)
+
+        # Connect button actions to dialog behavior
+        self.save_button.clicked.connect(self.accept)   # Accept closes dialog with success
+        self.cancel_button.clicked.connect(self.reject) # Reject closes dialog without saving
 
     def get_instrument_data(self):
+        """
+        Collect all input values and return them as a dictionary.
+        Empty fields are converted to None to match database expectations.
+        """
         return {
-            'instrument_name': None if not self.name_input.text().strip() else self.name_input.text().strip(),
+            'instrument_name': None if not self.instruments_combo.currentText().strip() else self.instruments_combo.currentText().strip(),
             'instrument_serial': None if not self.serial_input.text().strip() else self.serial_input.text().strip(),
             'instrument_case': None if not self.case_input.text().strip() else self.case_input.text().strip(),
             'model': None if not self.model_input.text().strip() else self.model_input.text().strip(),
             'condition': None if not self.condition_combo.currentText() else self.condition_combo.currentText(),
-            'instrument_section': None if not self.section_combo.currentText().strip() else self.section_combo.currentText().strip(),
-            'status': 'Available',
+            'status': 'Available',  # Default status for new instruments
             'notes': None if not self.notes_input.text().strip() else self.notes_input.text().strip()
         }
