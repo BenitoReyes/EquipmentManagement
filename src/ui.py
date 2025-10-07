@@ -150,7 +150,8 @@ class EquipmentManagementUI(QWidget):
             self.delete_all_uniforms()
         elif clicked == btn_instruments:
             self.delete_all_instruments()
-        # else: cancel
+        elif clicked == btn_cancel:
+            self.close()
 
     def show_about_dialog(self):
         QMessageBox.information(
@@ -195,34 +196,46 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
     
     def show_students_table(self):
-        # Make the student table occupy the full main area by removing other widgets
+        self.active_table = "students"
+
+        # Clear other widgets from layout
         for i in reversed(range(self.layout.count())):
             item = self.layout.itemAt(i)
             if item and item.widget() and item.widget() is not self.student_table and item.widget() is not None:
                 item.widget().setParent(None)
+
+        # Create student table if needed
         if not hasattr(self, 'student_table') or self.student_table.parent() is None:
             self.student_table = QTableWidget()
             self.layout.addWidget(self.student_table)
+
         self.student_table.show()
         self.refresh_table()
 
     def refresh_table(self):
-        """Show the main students view with joined uniform/instrument data."""
+        self.active_table = "students"
+
         rows, headers = db.get_students_with_uniforms_and_instruments()
 
+        self.student_table.setSortingEnabled(False)  # Disable sorting during population
+        self.student_table.clearContents()
         self.student_table.setColumnCount(len(headers))
         self.student_table.setHorizontalHeaderLabels(headers)
         self.student_table.setRowCount(len(rows))
 
-        # Populate rows
         for r, row in enumerate(rows):
+            # Normalize row length
+            if len(row) < len(headers):
+                row += [None] * (len(headers) - len(row))
+            elif len(row) > len(headers):
+                print(f"Warning: Row {r} has extra fields. Trimming.")
+                row = row[:len(headers)]
+
             for c, val in enumerate(row):
-                text = "" if val is None else str(val)
-                self.student_table.setItem(r, c, QTableWidgetItem(text))
+                item = QTableWidgetItem("" if val is None else str(val))
+                self.student_table.setItem(r, c, item)
 
         header = self.student_table.horizontalHeader()
-
-        # Smarter sizing: stretch for text-heavy fields, resize for compact ones
         stretch_labels = {"First Name", "Last Name", "Email", "Guardian Name", "Notes"}
         for idx, label in enumerate(headers):
             if label in stretch_labels:
@@ -233,15 +246,25 @@ class EquipmentManagementUI(QWidget):
         self.student_table.verticalHeader().setVisible(False)
         self.student_table.setSortingEnabled(True)
 
-        # Sort by last name dynamically
+        # Sort by last name if present
         if "Last Name" in headers:
             last_name_index = headers.index("Last Name")
             self.student_table.sortItems(last_name_index)
+
+    def refresh_if_active(self, table_name):
+        if self.active_table == table_name:
+            if table_name == "students":
+                self.refresh_table()
+            elif table_name == "uniforms":
+                self.show_uniform_table_screen()
+            elif table_name == "instruments":
+                self.view_all_instruments_table()
 
     def view_all_uniforms_table(self):
         """
         Show all uniform records in the table.
         """
+        self.active_table = "uniforms"
         headers = [
             "Record ID", "Student ID", "Shako #", "Hanger #",
             "Garment Bag", "Coat #", "Pants #", "Status", "Notes"
@@ -260,6 +283,7 @@ class EquipmentManagementUI(QWidget):
         self.student_table.resizeColumnsToContents()
 
     def open_uniform_inventory(self):
+        self.active_table = "uniforms"
         dlg = QDialog(self)
         dlg.setWindowTitle("Uniform Inventory")
         vbox = QVBoxLayout()
@@ -349,6 +373,7 @@ class EquipmentManagementUI(QWidget):
         dlg.exec()
 
     def show_uniform_table_screen(self):
+        self.active_table = "uniforms"
         """Display separate uniform component tables full-screen (keeps button bar)."""
         # Remove any existing widgets under the main layout (but keep the button bar layout)
         for i in reversed(range(self.layout.count())):
@@ -449,16 +474,15 @@ class EquipmentManagementUI(QWidget):
         self.layout.addWidget(bag_group)
 
     def view_all_instruments_table(self):
-        """
-        Show all instrument records in the table.
-        """
-        # Make instruments view full screen (remove other main widgets)
+        self.active_table = "instruments"
+
+        # Remove other widgets
         for i in reversed(range(self.layout.count())):
             item = self.layout.itemAt(i)
             if item and item.widget() and item.widget() is not self.student_table and item.widget() is not None:
                 item.widget().setParent(None)
 
-        # Reuse student_table as the single table area
+        # Create or reuse the table
         if not hasattr(self, 'student_table') or self.student_table.parent() is None:
             self.student_table = QTableWidget()
             self.layout.addWidget(self.student_table)
@@ -467,188 +491,636 @@ class EquipmentManagementUI(QWidget):
             "ID", "Student ID", "Name", "Serial", "Case",
             "Model", "Condition", "Status", "Notes"
         ]
-        self.student_table.setColumnCount(len(headers))
+        expected_len = len(headers)
+
+        self.student_table.setSortingEnabled(False)
+        self.student_table.clearContents()
+        self.student_table.setColumnCount(expected_len)
         self.student_table.setHorizontalHeaderLabels(headers)
         self.student_table.setRowCount(0)
 
         rows = db.get_all_instruments()
+        self.student_table.setRowCount(len(rows))
         for r, inst in enumerate(rows):
-            self.student_table.insertRow(r)
-            # inst: id, student_id, name, serial, case, model, condition, status, notes
-            for c, val in enumerate([
-                inst[0], inst[1], inst[2], inst[3],
-                inst[4], inst[5], inst[6], inst[7], inst[8]
-            ]):
+            inst = list(inst)
+            if len(inst) < expected_len:
+                inst += [None] * (expected_len - len(inst))
+            elif len(inst) > expected_len:
+                print(f"Warning: Instrument row {r} has extra fields. Trimming.")
+                inst = inst[:expected_len]
+
+            for c, val in enumerate(inst):
                 text = "" if val is None else str(val)
                 self.student_table.setItem(r, c, QTableWidgetItem(text))
-
+        self.student_table.setSortingEnabled(True)
+        self.student_table.sortItems(7)
         self.student_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.student_table.setVerticalHeaderLabels(["" for _ in range(self.student_table.rowCount())])
+        self.student_table.verticalHeader().setVisible(False)
 
-    def find_instrument_popup(self):
-        """
-        Opens a dialog to search for instruments by serial number and/or name.
-        Displays matching results in a table with clear row highlighting and edit functionality.
-        """
-        dlg = AddInstrumentDialog(self, find_mode=True, instruments=self.sections)
-        if not dlg.exec():
+    # --------------------------------------------------------------------------
+    # Student CRUD methods
+    # --------------------------------------------------------------------------
+
+    def find_student_popup(self):
+        """Opens a dialog to search for students by ID or section."""
+        choice, ok = QInputDialog.getItem(
+            self, "Find Student", "Search by:", ["Student ID", "Section"], 0, False
+        )
+        if not ok:
             return
 
-        q = dlg.get_instrument_data()
-        serial_query = q.get('instrument_serial')
-        name_query = q.get('instrument_name')
+        if choice == "Student ID":
+            sid, okid = QInputDialog.getText(self, "Find Student", "Enter Student ID:")
+            if not okid or not sid.strip():
+                return
+            sid = sid.strip()
+            if not sid.isdigit() or len(sid) != 9:
+                QMessageBox.warning(self, "Error", "ID must be 9 digits.")
+                return
 
-        found_rows = []
-        for r in db.get_all_instruments():
-            serial_match = serial_query and r[3] == serial_query
-            name_match = name_query and r[2] and name_query.lower() in r[2].lower()
+            stu = db.get_student_by_id(sid)
+            if not stu:
+                QMessageBox.information(self, "Not Found", "No student.")
+                return
 
-            if serial_query and name_query:
-                if serial_match and name_match:
-                    found_rows.append(r)
-            elif serial_match or name_match:
-                found_rows.append(r)
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Student Found")
+            vbox = QVBoxLayout()
 
-        dlg2 = QDialog(self)
-        dlg2.setWindowTitle("Find Instrument Results")
-        v = QVBoxLayout()
-
-        if not found_rows:
-            v.addWidget(QLabel("No matching instrument found."))
-        else:
             table = QTableWidget()
-            table.setColumnCount(9)
-            table.setHorizontalHeaderLabels([
-                "ID", "Student", "Name", "Serial", "Case", "Model",
-                "Condition", "Status", "Notes"
-            ])
-            table.setRowCount(len(found_rows))
+            table.setColumnCount(3)
+            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
+            table.setRowCount(1)
+            table.setItem(0, 0, QTableWidgetItem(str(stu[0])))
+            table.setItem(0, 1, QTableWidgetItem(stu[1]))
+            table.setItem(0, 2, QTableWidgetItem(stu[2]))
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.setStyleSheet("""
+                QTableWidget {
+                    background-color: #1e1e1e;
+                    color: white;
+                }
+                QTableWidget::item {
+                    padding: 6px;
+                }
+            """)
 
-            # Manual row tracking
+            vbox.addWidget(QLabel("Student found:"))
+            vbox.addWidget(table)
+
+            hbox = QHBoxLayout()
+            view_btn = QPushButton("View")
+            edit_btn = QPushButton("Edit")
+
+            view_btn.clicked.connect(lambda _, s=stu, d=dlg: self._view_single_student(s, d))
+            edit_btn.clicked.connect(lambda: (
+                self._edit_single_student(stu),
+                dlg.accept(),
+                self.refresh_if_active("students")
+            ))
+
+            hbox.addWidget(view_btn)
+            hbox.addWidget(edit_btn)
+            vbox.addLayout(hbox)
+
+            dlg.setLayout(vbox)
+            dlg.exec()
+
+        else:
+            section, oksec = QInputDialog.getItem(
+                self, "Find Student", "Select Section:", self.sections, 0, False
+            )
+            if not oksec:
+                return
+
+            students = db.get_students_by_section(section)
+            if not students:
+                QMessageBox.information(self, "Not Found", "No students in that section.")
+                return
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Select Student")
+            vbox = QVBoxLayout()
+
+            table = QTableWidget()
+            table.setColumnCount(3)
+            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
+            table.setRowCount(len(students))
             selected_row = [-1]
 
             def highlight_row(row_index):
-                # Clear previous highlight
                 for r in range(table.rowCount()):
                     for c in range(table.columnCount()):
                         item = table.item(r, c)
                         if item:
                             item.setBackground(QColor("#1e1e1e"))
-
-                # Apply highlight to selected row
                 for c in range(table.columnCount()):
                     item = table.item(row_index, c)
                     if item:
                         item.setBackground(QColor("#3c3c3c"))
-
                 selected_row[0] = row_index
 
-            for r, row in enumerate(found_rows):
-                for c, val in enumerate([
-                    row[0], row[1], row[2], row[3], row[4],
-                    row[5], row[6], row[7], row[9]
-                ]):
-                    item = QTableWidgetItem(str(val) if val is not None else "")
-                    table.setItem(r, c, item)
+            for r, s in enumerate(students):
+                table.setItem(r, 0, QTableWidgetItem(str(s[0])))
+                table.setItem(r, 1, QTableWidgetItem(s[1]))
+                table.setItem(r, 2, QTableWidgetItem(s[2]))
 
             table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
             table.cellClicked.connect(lambda r, _: highlight_row(r))
-            v.addWidget(table)
 
-            h = QHBoxLayout()
-            edit_btn = QPushButton("Edit Selected")
-            close_btn = QPushButton("Close")
-            h.addWidget(edit_btn)
-            h.addWidget(close_btn)
-            v.addLayout(h)
+            vbox.addWidget(QLabel(f"Students in section: {section}"))
+            vbox.addWidget(table)
 
-            def on_edit():
+            hbox = QHBoxLayout()
+            view_all_btn = QPushButton("View All")
+            edit_sel_btn = QPushButton("Edit Selected")
+
+            def on_edit_selected():
                 r = selected_row[0]
                 if r < 0:
-                    QMessageBox.warning(self, "Select", "Select a row to edit.")
+                    QMessageBox.information(self, "Select", "Select a student to edit.")
                     return
+                self._edit_single_student(students[r])
+                dlg.accept()
+                self.refresh_if_active("students")
 
-                inst_id = int(table.item(r, 0).text())
-                ed = QDialog(self)
-                ed.setWindowTitle(f"Edit Instrument {inst_id}")
-                ed_v = QVBoxLayout()
+            view_all_btn.clicked.connect(lambda _, s=students, sec=section, d=dlg: self._view_section_students(s, sec, d))
+            edit_sel_btn.clicked.connect(on_edit_selected)
 
-                instrument_cb = QComboBox()
-                instrument_cb.addItems(self.sections)
-                instrument_cb.setCurrentText(table.item(r, 2).text())
+            hbox.addWidget(view_all_btn)
+            hbox.addWidget(edit_sel_btn)
+            vbox.addLayout(hbox)
 
-                serial_in = QLineEdit(table.item(r, 3).text())
-                case_in = QLineEdit(table.item(r, 4).text())
-                model_in = QLineEdit(table.item(r, 5).text())
+            dlg.setLayout(vbox)
+            dlg.exec()
 
-                cond_cb = QComboBox()
-                cond_cb.addItems(["Excellent", "Good", "Fair", "Poor"])
-                cond_cb.setCurrentText(table.item(r, 6).text())
+    def open_add_student_popup(self):
+        dialog = AddStudentDialog()
+        if dialog.exec():
+            self.refresh_if_active(self.active_table)
 
-                status_cb = QComboBox()
-                status_cb.addItems(["Available", "Assigned", "Maintenance", "Retired"])
-                status_cb.setCurrentText(table.item(r, 7).text())
+    def update_student(self):
+        """Launches a dialog to update a student by ID or last name."""
+        sid, ok = QInputDialog.getText(
+            self, "Update Student",
+            "Enter Student ID (9 digits) or leave blank to search by last name:"
+        )
+        if not ok:
+            return
 
-                notes_in = QLineEdit(table.item(r, 8).text())
+        sid = sid.strip()
 
-                ed_v.addWidget(QLabel("Instrument:"))
-                ed_v.addWidget(instrument_cb)
-                ed_v.addWidget(QLabel("Serial:"))
-                ed_v.addWidget(serial_in)
-                ed_v.addWidget(QLabel("Case:"))
-                ed_v.addWidget(case_in)
-                ed_v.addWidget(QLabel("Model:"))
-                ed_v.addWidget(model_in)
-                ed_v.addWidget(QLabel("Condition:"))
-                ed_v.addWidget(cond_cb)
-                ed_v.addWidget(QLabel("Status:"))
-                ed_v.addWidget(status_cb)
-                ed_v.addWidget(QLabel("Notes:"))
-                ed_v.addWidget(notes_in)
+        # --- Search by Last Name ---
+        if not sid:
+            last, okn = QInputDialog.getText(self, "Update Student", "Enter Last Name:")
+            if not okn or not last.strip():
+                return
 
-                be_h = QHBoxLayout()
-                be_save = QPushButton("Save")
-                be_cancel = QPushButton("Cancel")
-                be_h.addWidget(be_save)
-                be_h.addWidget(be_cancel)
-                ed_v.addLayout(be_h)
-                ed.setLayout(ed_v)
+            matches = db.get_students_by_last_name(last.strip())
+            if not matches:
+                QMessageBox.information(self, "Not Found", "No matches.")
+                return
 
-                def on_save():
-                    db.update_instrument_by_id(
-                        inst_id,
-                        name=instrument_cb.currentText().strip() or None,
-                        case=case_in.text().strip() or None,
-                        status=status_cb.currentText(),
-                        notes=notes_in.text().strip() or None,
-                        model=model_in.text().strip() or None,
-                        condition=cond_cb.currentText()
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Select Student")
+            vbox = QVBoxLayout()
+
+            table = QTableWidget()
+            table.setColumnCount(3)
+            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
+            table.setRowCount(len(matches))
+            selected_row = [-1]
+
+            def highlight_row(row_index):
+                for r in range(table.rowCount()):
+                    for c in range(table.columnCount()):
+                        item = table.item(r, c)
+                        if item:
+                            item.setBackground(QColor("#1e1e1e"))
+                for c in range(table.columnCount()):
+                    item = table.item(row_index, c)
+                    if item:
+                        item.setBackground(QColor("#3c3c3c"))
+                selected_row[0] = row_index
+
+            for r, s in enumerate(matches):
+                table.setItem(r, 0, QTableWidgetItem(str(s[0])))
+                table.setItem(r, 1, QTableWidgetItem(s[1]))
+                table.setItem(r, 2, QTableWidgetItem(s[2]))
+
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.cellClicked.connect(lambda r, _: highlight_row(r))
+            table.cellDoubleClicked.connect(lambda r, _: edit_selected(r))
+
+            def edit_selected(row_index):
+                self._edit_single_student(matches[row_index])
+                dlg.accept()
+                self.refresh_if_active("students")
+
+            vbox.addWidget(QLabel("Select a student to edit:"))
+            vbox.addWidget(table)
+
+            btn = QPushButton("Edit Selected")
+
+            def on_edit_selected():
+                r = selected_row[0]
+                if r < 0:
+                    QMessageBox.information(self, "Select", "Select a student to edit.")
+                    return
+                edit_selected(r)
+
+            btn.clicked.connect(on_edit_selected)
+            vbox.addWidget(btn)
+
+            dlg.setLayout(vbox)
+            dlg.exec()
+            return
+
+        # --- Search by Student ID ---
+        if not sid.isdigit() or len(sid) != 9:
+            QMessageBox.warning(self, "Error", "ID must be 9 digits.")
+            return
+
+        data = db.get_student_by_id(sid)
+        if not data:
+            QMessageBox.warning(self, "Error", "Not found.")
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Student Found")
+        vbox = QVBoxLayout()
+
+        table = QTableWidget()
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
+        table.setRowCount(1)
+        table.setItem(0, 0, QTableWidgetItem(str(data[0])))
+        table.setItem(0, 1, QTableWidgetItem(data[1]))
+        table.setItem(0, 2, QTableWidgetItem(data[2]))
+
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.setStyleSheet("""
+            QTableWidget {
+                background-color: #1e1e1e;
+                color: white;
+            }
+            QTableWidget::item {
+                padding: 6px;
+            }
+        """)
+
+        vbox.addWidget(QLabel("Student found:"))
+        vbox.addWidget(table)
+
+        edit_btn = QPushButton("Edit")
+        edit_btn.clicked.connect(lambda: (self._edit_single_student(data), dlg.accept(), self.refresh_if_active("students")))
+        vbox.addWidget(edit_btn)
+
+        dlg.setLayout(vbox)
+        dlg.exec()
+
+    def _handle_batch_edit(self, list_widget, students, dialog):
+        idx = list_widget.currentRow()
+        if idx < 0:
+            return
+        ed = EditStudentDialog(students[idx])
+        ed.exec()
+        self.refresh_if_active(self.active_table)
+        dialog.accept()
+
+    def delete_student(self):
+        sid, ok = QInputDialog.getText(self, "Delete Student", "Enter Student ID (9 digits):")
+        if not ok or not sid.strip():
+            return
+        sid = sid.strip()
+        if not sid.isdigit() or len(sid) != 9:
+            QMessageBox.warning(self, "Error", "ID must be 9 digits.")
+            return
+
+        data = db.get_student_by_id(sid)
+        if not data:
+            QMessageBox.warning(self, "Error", "Not found.")
+            return
+
+        ans = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete {data[1]} {data[2]} (ID: {sid})?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if ans == QMessageBox.StandardButton.Yes:
+            db.delete_student(sid)
+            QMessageBox.information(self, "Deleted", "Student deleted.")
+            self.refresh_if_active(self.active_table)
+
+    def delete_all_students(self):
+        ans = QMessageBox.question(
+            self, "Delete ALL",
+            "This will remove ALL students continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+
+        txt, ok = QInputDialog.getText(
+            self, "Final Confirmation", 'Type DELETE ALL to confirm:'
+        )
+        if not ok or txt.strip() != "DELETE ALL":
+            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
+            return
+        db.delete_all_students()
+        QMessageBox.information(self, "Deleted", "All data cleared.")
+        self.refresh_if_active(self.active_table)
+
+    def import_students_from_csv(self):
+        """
+        Import students from a CSV file. Overwrite existing students with the same ID.
+        Supports two formats:
+        1) Backup-style rows prefixed with 'STUDENTS'
+        2) Plain CSV with headers
+        """
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Students from CSV", "", "CSV Files (*.csv);;All Files (*)"
+        )
+        if not file_path:
+            return
+
+        count_added = 0
+        count_updated = 0
+
+        with open(file_path, newline='', encoding='utf-8') as csvfile:
+            first = csvfile.read(1024)
+            csvfile.seek(0)
+
+            # --- Format 1: Backup-style rows prefixed with 'STUDENTS' ---
+            if first.lstrip().upper().startswith('STUDENTS') or ',STUDENTS' in first.upper():
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if not row or row[0].strip().upper() != 'STUDENTS':
+                        continue
+                    parts = [p if p != '' else None for p in row[1:]]
+
+                    # Expect 12 fields: student_id, first_name, last_name, phone, email,
+                    # year_came_up, status, guardian_name, guardian_phone, section,
+                    # glove_size, spat_size
+                    if len(parts) < 12:
+                        continue
+
+                    sid = parts[0]
+                    if not sid or not sid.isdigit() or len(sid) != 9:
+                        continue
+
+                    inserted = db.add_or_update_student(
+                        sid, parts[1], parts[2], parts[6], parts[9],
+                        parts[3], parts[4], parts[7], parts[8], parts[5],
+                        parts[10], parts[11]
                     )
-                    QMessageBox.information(self, "Saved", "Instrument updated.")
-                    ed.accept()
+                    if inserted:
+                        count_added += 1
+                    else:
+                        count_updated += 1
 
-                    # Update table row
-                    table.setItem(r, 2, QTableWidgetItem(instrument_cb.currentText().strip()))
-                    table.setItem(r, 3, QTableWidgetItem(serial_in.text().strip()))
-                    table.setItem(r, 4, QTableWidgetItem(case_in.text().strip()))
-                    table.setItem(r, 5, QTableWidgetItem(model_in.text().strip()))
-                    table.setItem(r, 6, QTableWidgetItem(cond_cb.currentText()))
-                    table.setItem(r, 7, QTableWidgetItem(status_cb.currentText()))
-                    table.setItem(r, 8, QTableWidgetItem(notes_in.text().strip()))
+            # --- Format 2: Plain CSV with headers ---
+            else:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    sid = row.get('student_id') or row.get('Student ID') or row.get('ID')
+                    if not sid or not sid.isdigit() or len(sid) != 9:
+                        continue
 
-                    highlight_row(r)  # Reapply highlight after update
-                    self.refresh_table()
+                    student_data = {
+                        'student_id': sid,
+                        'first_name': row.get('first_name') or row.get('First Name') or '',
+                        'last_name': row.get('last_name') or row.get('Last Name') or '',
+                        'status': row.get('status') or row.get('Status') or '',
+                        'section': row.get('section') or row.get('Section') or '',
+                        'phone': row.get('phone') or row.get('Phone') or '',
+                        'email': row.get('email') or row.get('Email') or '',
+                        'guardian_name': row.get('guardian_name') or row.get('Guardian Name') or '',
+                        'guardian_phone': row.get('guardian_phone') or row.get('Guardian Phone') or '',
+                        'year_came_up': row.get('year_came_up') or row.get('Year Came Up') or '',
+                        'glove_size': row.get('glove_size') or row.get('Glove Size') or '',
+                        'spat_size': row.get('spat_size') or row.get('Spat Size') or '',
+                    }
 
-                be_save.clicked.connect(on_save)
-                be_cancel.clicked.connect(ed.reject)
-                ed.exec()
+                    inserted = db.add_or_update_student(
+                        sid,
+                        student_data['first_name'],
+                        student_data['last_name'],
+                        student_data['status'],
+                        student_data['section'],
+                        student_data['phone'],
+                        student_data['email'],
+                        student_data['guardian_name'],
+                        student_data['guardian_phone'],
+                        student_data['year_came_up'],
+                        student_data['glove_size'],
+                        student_data['spat_size']
+                    )
+                    if inserted:
+                        count_added += 1
+                    else:
+                        count_updated += 1
 
-            edit_btn.clicked.connect(on_edit)
-            close_btn.clicked.connect(dlg2.accept)
+        self.refresh_if_active(self.active_table)
+        QMessageBox.information(self, "Import Complete", f"Added: {count_added}\nUpdated: {count_updated}")
+    
+    def student_to_code_popup(self):
+        """
+        Prompt for Student ID, choose QR Code or Barcode,
+        generate and display with Print, Full Screen, Close.
+        """
+        sid, ok = QInputDialog.getText(self, "Student to Bar/QR code", "Enter Student ID:")
+        if not ok or not sid.strip():
+            return
+        if not sid.isdigit() or len(sid) != 9:
+            QMessageBox.warning(self, "Error", "Student ID must be 9 digits.")
+            return
+        student = db.get_student_by_id(sid.strip())
+        if not student:
+            QMessageBox.information(self, "Not Found", "No student found.")
+            return
 
-        dlg2.setLayout(v)
-        dlg2.exec()
+        code_type, ok = QInputDialog.getItem(
+            self, "Choose Code Type", "Generate:", ["QR Code", "Barcode"], 0, False
+        )
+        if not ok:
+            return
 
+        info = (
+            f"ID:{student[0]} "
+            f"Name:{student[2]}, {student[1]} "
+            f"Phone:{student[3]} Email:{student[4]} "
+            f"Year:{student[5]} Status:{student[6]} "
+            f"Guardian:{student[7]} ({student[8]}) "
+            f"Section:{student[9]}"
+        )
+
+        if code_type == "QR Code":
+            img = qrcode.make(info).convert("RGB")
+        else:
+            cls = barcode.get_barcode_class('code128')
+            img = cls(student[0], writer=ImageWriter()).render(writer_options={"write_text": False}).convert("RGB")
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        qimg = QImage.fromData(buf.getvalue())
+        pix = QPixmap.fromImage(qimg)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"{code_type} for {student[0]}")
+        vbox = QVBoxLayout()
+        lbl = QLabel()
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scaled = pix.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        lbl.setPixmap(scaled)
+        vbox.addWidget(lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        hbox = QHBoxLayout()
+        print_btn = QPushButton("Print")
+        fs_btn = QPushButton("Full Screen")
+        close_btn = QPushButton("Close")
+        hbox.addWidget(print_btn)
+        hbox.addWidget(fs_btn)
+        hbox.addWidget(close_btn)
+        vbox.addLayout(hbox)
+        dlg.setLayout(vbox)
+
+        def on_print():
+            printer = QPrinter()
+            pd = QPrintDialog(printer, dlg)
+            if pd.exec():
+                painter = QPainter(printer)
+                rect = painter.viewport()
+                size = scaled.size()
+                size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
+                painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
+                painter.setWindow(scaled.rect())
+                painter.drawPixmap(0, 0, scaled)
+                painter.end()
+
+        def on_fullscreen():
+            fs = QDialog(self)
+            fs.setWindowTitle("Full Screen Code")
+            box = QVBoxLayout()
+            lbl_fs = QLabel()
+            lbl_fs.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_fs.setPixmap(pix.scaled(400, 400,
+                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            box.addWidget(lbl_fs)
+            fs.setLayout(box)
+            fs.showMaximized()
+            fs.exec()
+
+        print_btn.clicked.connect(on_print)
+        fs_btn.clicked.connect(on_fullscreen)
+        close_btn.clicked.connect(dlg.accept)
+        dlg.exec()
+
+    # --------------------------------------------------------------------------
+    # Find / View methods
+    # --------------------------------------------------------------------------
+
+    def _view_single_student(self, stu, dialog):
+        """
+        Display a printable summary of a student's full profile,
+        including uniform and instrument assignments if available.
+        """
+        headers = [
+            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
+            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
+            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+            "Instrument Name", "Instrument Serial", "Instrument Case"
+        ]
+
+        vals = list(stu)
+
+        # If student-only row, enrich with uniform/instrument data
+        if len(vals) < len(headers):
+            sid = vals[0]
+            enriched = db.get_students_with_uniforms_and_instruments()
+            match = next((r for r in enriched if r[0] == sid), None)
+            if match:
+                vals = list(match)
+            else:
+                vals += [None] * (len(headers) - len(vals))
+
+        info = "\n".join(
+            f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
+            for i in range(len(headers))
+        )
+
+        self.show_printable_results("Student Info", info)
+        dialog.accept()
+
+    def _edit_single_student(self, stu):
+        """Launches the EditStudentDialog for a single student."""
+        ed = EditStudentDialog(stu)
+        ed.exec()
+        self.refresh_if_active("students")
+
+    def _view_section_students(self, students, section, dialog):
+        headers = [
+            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
+            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
+            "Glove Size", "Spat Size",
+            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
+            "Instrument Name", "Instrument Serial", "Instrument Case"
+        ]
+
+        info = ""
+        joined_rows = db.get_students_with_uniforms_and_instruments()
+
+        for stu in students:
+            vals = list(stu)
+            sid = vals[0]
+
+            # Try to find full joined row
+            matched = [r for r in joined_rows if r[0] == sid]
+            if matched:
+                vals = list(matched[0])
+            else:
+                # Convert student-only row to joined layout
+                # students table: student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section, glove_size, spat_size
+                # joined layout: student_id, first_name, last_name, status, phone, email, guardian_name, guardian_phone, year_came_up, section
+                vals = [
+                    stu[0],  # student_id
+                    stu[1],  # first_name
+                    stu[2],  # last_name
+                    stu[6] if len(stu) > 6 else None,  # status
+                    stu[3] if len(stu) > 3 else None,  # phone
+                    stu[4] if len(stu) > 4 else None,  # email
+                    stu[7] if len(stu) > 7 else None,  # guardian_name
+                    stu[8] if len(stu) > 8 else None,  # guardian_phone
+                    stu[5] if len(stu) > 5 else None,  # year_came_up
+                    stu[9] if len(stu) > 9 else None,  # section
+                    stu[10] if len(stu) > 10 else None,  # glove_size
+                    stu[11] if len(stu) > 11 else None,  # spat_size
+                ]
+                vals += [None] * (len(headers) - len(vals))
+
+            block = "\n".join(
+                f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
+                for i in range(len(headers))
+            )
+            info += block + "\n" + "-" * 40 + "\n"
+
+        self.show_printable_results(f"Section: {section}", info)
+        dialog.accept()
+
+    def _edit_section_student(self, list_widget, students, dialog):
+        idx = list_widget.currentRow()
+        if idx < 0:
+            return
+        ed = EditStudentDialog(students[idx])
+        ed.exec()
+        self.refresh_if_active(self.active_table)
+        dialog.accept()
+
+    # --------------------------------------------------------------------------
+    # Uniform methods
+    # --------------------------------------------------------------------------
+    
     def find_uniform_popup(self):
         """
         Open the AddUniformDialog in find mode and return matching component values.
@@ -785,10 +1257,6 @@ class EquipmentManagementUI(QWidget):
                     ed_v.addWidget(QLabel("Hanger # (optional):"))
                     ed_v.addWidget(hanger_inp)
 
-                ed_v.addWidget(QLabel("Status:"))
-                ed_v.addWidget(status_cb)
-                ed_v.addWidget(QLabel("Student ID (9 digits or blank):"))
-                ed_v.addWidget(stud_inp)
                 ed_v.addWidget(QLabel("Notes:"))
                 ed_v.addWidget(notes_inp)
 
@@ -801,14 +1269,6 @@ class EquipmentManagementUI(QWidget):
                 ed.setLayout(ed_v)
 
                 def on_save_edit():
-                    new_status = status_cb.currentText()
-                    status_param = new_status if new_status != status_val else None
-
-                    entered_student = stud_inp.text().strip()
-                    student_param = entered_student if entered_student != orig_student else None
-                    if entered_student == "":
-                        student_param = None
-
                     entered_notes = notes_inp.text().strip()
                     notes_param = entered_notes if entered_notes != orig_notes else None
 
@@ -826,16 +1286,14 @@ class EquipmentManagementUI(QWidget):
                                     return
 
                     if typ == 'Shako':
-                        db.update_shako(int(num), student_id=student_param, status=status_param, notes=notes_param)
+                        db.update_shako(int(num), notes=notes_param)
                     elif typ == 'Coat':
-                        db.update_coat(int(num), student_id=student_param, status=status_param, hanger_num=hanger_param, notes=notes_param)
+                        db.update_coat(int(num), hanger_num=hanger_param, notes=notes_param)
                     elif typ == 'Pants':
-                        db.update_pants(int(num), student_id=student_param, status=status_param, notes=notes_param)
+                        db.update_pants(int(num), notes=notes_param)
                     elif typ == 'Bag':
-                        db.update_bag(num, student_id=student_param, status=status_param, notes=notes_param)
+                        db.update_bag(num, notes=notes_param)
 
-                    table.setItem(r, 3, QTableWidgetItem(new_status if status_param else status_val))
-                    table.setItem(r, 4, QTableWidgetItem(entered_student if student_param else orig_student))
                     table.setItem(r, 5, QTableWidgetItem(entered_notes if notes_param else orig_notes))
                     if typ == 'Coat' and hanger_param is not None:
                         table.setItem(r, 2, QTableWidgetItem(str(hanger_param)))
@@ -843,6 +1301,7 @@ class EquipmentManagementUI(QWidget):
                     highlight_row(r)
                     QMessageBox.information(self, "Saved", "Changes saved.")
                     ed.accept()
+                    self.refresh_if_active(self.active_table)
 
 
                 be_save.clicked.connect(on_save_edit)
@@ -855,645 +1314,115 @@ class EquipmentManagementUI(QWidget):
         dlg.setLayout(v)
         dlg.exec()
 
-    def find_student_popup(self):
-        """
-        Opens a dialog to search for students by ID or section.
-        Displays matching results in a table with clear row highlighting and edit/view options.
-        """
-        choice, ok = QInputDialog.getItem(
-            self, "Find Student", "Search by:", ["Student ID", "Section"], 0, False
-        )
-        if not ok:
-            return
-
-        if choice == "Student ID":
-            sid, okid = QInputDialog.getText(self, "Find Student", "Enter Student ID:")
-            if not okid or not sid.strip():
-                return
-            sid = sid.strip()
-            if not sid.isdigit() or len(sid) != 9:
-                QMessageBox.warning(self, "Error", "ID must be 9 digits.")
-                return
-
-            stu = db.get_student_by_id(sid)
-            if not stu:
-                QMessageBox.information(self, "Not Found", "No student.")
-                return
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Student Found")
-            vbox = QVBoxLayout()
-
-            table = QTableWidget()
-            table.setColumnCount(3)
-            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
-            table.setRowCount(1)
-
-            table.setItem(0, 0, QTableWidgetItem(str(stu[0])))
-            table.setItem(0, 1, QTableWidgetItem(stu[1]))
-            table.setItem(0, 2, QTableWidgetItem(stu[2]))
-
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-            table.setStyleSheet("""
-                QTableWidget {
-                    background-color: #1e1e1e;
-                    color: white;
-                }
-                QTableWidget::item {
-                    padding: 6px;
-                }
-            """)
-
-            vbox.addWidget(QLabel("Student found:"))
-            vbox.addWidget(table)
-
-            hbox = QHBoxLayout()
-            view_btn = QPushButton("View")
-            edit_btn = QPushButton("Edit")
-
-            view_btn.clicked.connect(lambda: self._view_single_student(stu, dlg))
-            edit_btn.clicked.connect(lambda: self._edit_single_student(stu, dlg))
-            hbox.addWidget(view_btn)
-            hbox.addWidget(edit_btn)
-            vbox.addLayout(hbox)
-
-            dlg.setLayout(vbox)
-            dlg.exec()
-
-
-        else:
-            section, oksec = QInputDialog.getItem(
-                self, "Find Student", "Select Section:", self.sections, 0, False
-            )
-            if not oksec:
-                return
-
-            students = db.get_students_by_section(section)
-            if not students:
-                QMessageBox.information(self, "Not Found", "No students in that section.")
-                return
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Select Student")
-            vbox = QVBoxLayout()
-
-            table = QTableWidget()
-            table.setColumnCount(3)
-            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
-            table.setRowCount(len(students))
-
-            selected_row = [-1]
-
-            def highlight_row(row_index):
-                for r in range(table.rowCount()):
-                    for c in range(table.columnCount()):
-                        item = table.item(r, c)
-                        if item:
-                            item.setBackground(QColor("#1e1e1e"))
-
-                for c in range(table.columnCount()):
-                    item = table.item(row_index, c)
-                    if item:
-                        item.setBackground(QColor("#3c3c3c"))
-
-                selected_row[0] = row_index
-
-            for r, s in enumerate(students):
-                table.setItem(r, 0, QTableWidgetItem(str(s[0])))
-                table.setItem(r, 1, QTableWidgetItem(s[1]))
-                table.setItem(r, 2, QTableWidgetItem(s[2]))
-
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-            table.cellClicked.connect(lambda r, _: highlight_row(r))
-            vbox.addWidget(QLabel(f"Students in section: {section}"))
-            vbox.addWidget(table)
-
-            hbox = QHBoxLayout()
-            view_all_btn = QPushButton("View All")
-            edit_sel_btn = QPushButton("Edit Selected")
-
-            def on_edit_selected():
-                r = selected_row[0]
-                if r < 0:
-                    QMessageBox.information(self, "Select", "Select a student to edit.")
-                    return
-                self._edit_single_student(students[r], dlg)
-                highlight_row(r)
-
-            view_all_btn.clicked.connect(lambda: self._view_section_students(students, section, dlg))
-            edit_sel_btn.clicked.connect(on_edit_selected)
-            hbox.addWidget(view_all_btn)
-            hbox.addWidget(edit_sel_btn)
-            vbox.addLayout(hbox)
-
-            dlg.setLayout(vbox)
-            dlg.exec()
-
-    # --------------------------------------------------------------------------
-    # Student CRUD methods
-    # --------------------------------------------------------------------------
-
-    def open_add_student_popup(self):
-        dialog = AddStudentDialog()
-        if dialog.exec():
-            self.refresh_table()
-
-    def update_student(self):
-        """
-        Opens a dialog to update a student by ID or last name.
-        Displays matching results in a styled table with edit functionality.
-        """
-        sid, ok = QInputDialog.getText(
-            self, "Update Student",
-            "Enter Student ID (9 digits) or leave blank to search by last name:"
-        )
-        if not ok:
-            return
-
-        sid = sid.strip()
-
-        if not sid:
-            last, okn = QInputDialog.getText(self, "Update Student", "Enter Last Name:")
-            if not okn or not last.strip():
-                return
-
-            matches = db.get_students_by_last_name(last.strip())
-            if not matches:
-                QMessageBox.information(self, "Not Found", "No matches.")
-                return
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Select Student")
-            vbox = QVBoxLayout()
-
-            table = QTableWidget()
-            table.setColumnCount(3)
-            table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
-            table.setRowCount(len(matches))
-
-            selected_row = [-1]
-
-            def highlight_row(row_index):
-                for r in range(table.rowCount()):
-                    for c in range(table.columnCount()):
-                        item = table.item(r, c)
-                        if item:
-                            item.setBackground(QColor("#1e1e1e"))
-                for c in range(table.columnCount()):
-                    item = table.item(row_index, c)
-                    if item:
-                        item.setBackground(QColor("#3c3c3c"))
-
-                selected_row[0] = row_index
-
-            for r, s in enumerate(matches):
-                table.setItem(r, 0, QTableWidgetItem(str(s[0])))
-                table.setItem(r, 1, QTableWidgetItem(s[1]))
-                table.setItem(r, 2, QTableWidgetItem(s[2]))
-
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-            table.cellClicked.connect(lambda r, _: highlight_row(r))
-            vbox.addWidget(QLabel("Select a student to edit:"))
-            vbox.addWidget(table)
-
-            btn = QPushButton("Edit Selected")
-
-            def on_edit_selected():
-                r = selected_row[0]
-                if r < 0:
-                    QMessageBox.information(self, "Select", "Select a student to edit.")
-                    return
-                self._edit_single_student(matches[r], dlg)
-                highlight_row(r)
-
-            btn.clicked.connect(on_edit_selected)
-            vbox.addWidget(btn)
-
-            dlg.setLayout(vbox)
-            dlg.exec()
-            return
-
-        if not sid.isdigit() or len(sid) != 9:
-            QMessageBox.warning(self, "Error", "ID must be 9 digits.")
-            return
-
-        data = db.get_student_by_id(sid)
-        if not data:
-            QMessageBox.warning(self, "Error", "Not found.")
-            return
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Student Found")
-        vbox = QVBoxLayout()
-
-        table = QTableWidget()
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["ID", "First Name", "Last Name"])
-        table.setRowCount(1)
-
-        table.setItem(0, 0, QTableWidgetItem(str(data[0])))
-        table.setItem(0, 1, QTableWidgetItem(data[1]))
-        table.setItem(0, 2, QTableWidgetItem(data[2]))
-
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        table.setStyleSheet("""
-            QTableWidget {
-                background-color: #1e1e1e;
-                color: white;
-            }
-            QTableWidget::item {
-                padding: 6px;
-            }
-        """)
-
-        vbox.addWidget(QLabel("Student found:"))
-        vbox.addWidget(table)
-
-        hbox = QHBoxLayout()
-        edit_btn = QPushButton("Edit")
-        edit_btn.clicked.connect(lambda: self._edit_single_student(data, dlg))
-        hbox.addWidget(edit_btn)
-        vbox.addLayout(hbox)
-
-        dlg.setLayout(vbox)
-        dlg.exec()
-
-        self.refresh_table()
-
-    def _handle_batch_edit(self, list_widget, students, dialog):
-        idx = list_widget.currentRow()
-        if idx < 0:
-            return
-        ed = EditStudentDialog(students[idx])
-        ed.exec()
-        self.refresh_table()
-        dialog.accept()
-
-    def delete_student(self):
-        sid, ok = QInputDialog.getText(self, "Delete Student", "Enter Student ID (9 digits):")
-        if not ok or not sid.strip():
-            return
-        sid = sid.strip()
-        if not sid.isdigit() or len(sid) != 9:
-            QMessageBox.warning(self, "Error", "ID must be 9 digits.")
-            return
-
-        data = db.get_student_by_id(sid)
-        if not data:
-            QMessageBox.warning(self, "Error", "Not found.")
-            return
-
-        ans = QMessageBox.question(
-            self, "Confirm Delete",
-            f"Delete {data[1]} {data[2]} (ID: {sid})?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if ans == QMessageBox.StandardButton.Yes:
-            db.delete_student(sid)
-            QMessageBox.information(self, "Deleted", "Student deleted.")
-            self.refresh_table()
-
-    def delete_all_students(self):
-        ans = QMessageBox.question(
-            self, "Delete ALL",
-            "This will remove ALL students, uniforms, and instruments. Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if ans != QMessageBox.StandardButton.Yes:
-            return
-
-        txt, ok = QInputDialog.getText(
-            self, "Final Confirmation", 'Type DELETE ALL to confirm:'
-        )
-        if not ok or txt.strip() != "DELETE ALL":
-            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
-            return
-
-        db.delete_all_students()
-        db.delete_all_uniforms()
-        db.delete_all_instruments()
-        QMessageBox.information(self, "Deleted", "All data cleared.")
-        self.refresh_table()
-
-    def import_students_from_csv(self):
-        """
-        Import students from a CSV file. Overwrite existing students with the same ID.
-        """
-        file_path, _ = QFileDialog.getOpenFileName(self, "Import Students from CSV", "", "CSV Files (*.csv);;All Files (*)")
-        if not file_path:
-            return
-        count_added = 0
-        count_updated = 0
-        # Support two CSV formats:
-        # 1) Backup-style where each row begins with a section token (STUDENTS,...)
-        # 2) Plain CSV with headers (student_id, first_name, ...)
-        with open(file_path, newline='', encoding='utf-8') as csvfile:
-            # Peek first few bytes to decide format
-            first = csvfile.read(1024)
-            csvfile.seek(0)
-            # If file appears to use section-prefixed rows, parse as simple reader
-            if first.lstrip().upper().startswith('STUDENTS') or ',STUDENTS' in first.upper():
-                reader = csv.reader(csvfile)
-                for row in reader:
-                    if not row:
-                        continue
-                    if row[0].strip().upper() != 'STUDENTS':
-                        continue
-                    parts = [p if p != '' else None for p in row[1:]]
-                    # Expect same ordering as students table: student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section
-                    if len(parts) < 10:
-                        continue
-                    sid = parts[0]
-                    if not sid or not sid.isdigit() or len(sid) != 9:
-                        continue
-                    inserted = db.add_or_update_student(
-                        sid, parts[1], parts[2], parts[6], parts[9], parts[3], parts[4], parts[7], parts[8], parts[5]
-                    )
-                    if inserted:
-                        count_added += 1
-                    else:
-                        count_updated += 1
-            else:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    sid = row.get('student_id') or row.get('Student ID') or row.get('ID')
-                    if not sid or not sid.isdigit() or len(sid) != 9:
-                        continue
-                    # Prepare fields (adjust as needed for your schema)
-                    student_data = {
-                        'student_id': sid,
-                        'first_name': row.get('first_name') or row.get('First Name') or '',
-                        'last_name': row.get('last_name') or row.get('Last Name') or '',
-                        'status': row.get('status') or row.get('Status') or '',
-                        'section': row.get('section') or row.get('Section') or '',
-                        'phone': row.get('phone') or row.get('Phone') or '',
-                        'email': row.get('email') or row.get('Email') or '',
-                        'guardian_name': row.get('guardian_name') or row.get('Guardian Name') or '',
-                        'guardian_phone': row.get('guardian_phone') or row.get('Guardian Phone') or '',
-                        'year_came_up': row.get('year_came_up') or row.get('Year Came Up') or '',
-                    }
-                    # Use add_or_update_student to overwrite or insert
-                    inserted = db.add_or_update_student(
-                        sid,
-                        student_data['first_name'],
-                        student_data['last_name'],
-                        student_data['status'],
-                        student_data['section'],
-                        student_data['phone'],
-                        student_data['email'],
-                        student_data['guardian_name'],
-                        student_data['guardian_phone'],
-                        student_data['year_came_up']
-                    )
-                    if inserted:
-                        count_added += 1
-                    else:
-                        count_updated += 1
-        self.refresh_table()
-        QMessageBox.information(self, "Import Complete", f"Added: {count_added}\nUpdated: {count_updated}")
-    
-    def student_to_code_popup(self):
-        """
-        Prompt for Student ID, choose QR Code or Barcode,
-        generate and display with Print, Full Screen, Close.
-        """
-        sid, ok = QInputDialog.getText(self, "Student to Bar/QR code", "Enter Student ID:")
-        if not ok or not sid.strip():
-            return
-        if not sid.isdigit() or len(sid) != 9:
-            QMessageBox.warning(self, "Error", "Student ID must be 9 digits.")
-            return
-        student = db.get_student_by_id(sid.strip())
-        if not student:
-            QMessageBox.information(self, "Not Found", "No student found.")
-            return
-
-        code_type, ok = QInputDialog.getItem(
-            self, "Choose Code Type", "Generate:", ["QR Code", "Barcode"], 0, False
-        )
-        if not ok:
-            return
-
-        info = f"ID:{student[0]} Name:{student[2]}, {student[1]} Section:{student[4]}"
-        if code_type == "QR Code":
-            img = qrcode.make(info).convert("RGB")
-        else:
-            cls = barcode.get_barcode_class('code128')
-            img = cls(student[0], writer=ImageWriter()).render(writer_options={"write_text": False}).convert("RGB")
-
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        qimg = QImage.fromData(buf.getvalue())
-        pix = QPixmap.fromImage(qimg)
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle(f"{code_type} for {student[0]}")
-        vbox = QVBoxLayout()
-        lbl = QLabel()
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        scaled = pix.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        lbl.setPixmap(scaled)
-        vbox.addWidget(lbl, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        hbox = QHBoxLayout()
-        print_btn = QPushButton("Print")
-        fs_btn = QPushButton("Full Screen")
-        close_btn = QPushButton("Close")
-        hbox.addWidget(print_btn)
-        hbox.addWidget(fs_btn)
-        hbox.addWidget(close_btn)
-        vbox.addLayout(hbox)
-        dlg.setLayout(vbox)
-
-        def on_print():
-            printer = QPrinter()
-            pd = QPrintDialog(printer, dlg)
-            if pd.exec():
-                painter = QPainter(printer)
-                rect = painter.viewport()
-                size = scaled.size()
-                size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
-                painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
-                painter.setWindow(scaled.rect())
-                painter.drawPixmap(0, 0, scaled)
-                painter.end()
-
-        def on_fullscreen():
-            fs = QDialog(self)
-            fs.setWindowTitle("Full Screen Code")
-            box = QVBoxLayout()
-            lbl_fs = QLabel()
-            lbl_fs.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_fs.setPixmap(pix.scaled(400, 400,
-                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            box.addWidget(lbl_fs)
-            fs.setLayout(box)
-            fs.showMaximized()
-            fs.exec()
-
-        print_btn.clicked.connect(on_print)
-        fs_btn.clicked.connect(on_fullscreen)
-        close_btn.clicked.connect(dlg.accept)
-        dlg.exec()
-
-    # --------------------------------------------------------------------------
-    # Find / View methods
-    # --------------------------------------------------------------------------
-
-    def _view_single_student(self, stu, dialog):
-        headers = [
-            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
-            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
-            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
-            "Instrument Name", "Instrument Serial", "Instrument Case"
-        ]
-        # stu may be a full row from get_students_with_uniforms_and_instruments or a simple students row.
-        # Normalize into a list with expected length, filling missing fields by checking latest assignments.
-        vals = list(stu)
-        # If students-only row, fetch latest uniform/instrument for this student
-        if len(vals) < len(headers):
-            sid = vals[0]
-            # attempt to find latest uniform and instrument assignments
-            u = db.get_students_with_uniforms_and_instruments()
-            matched = [r for r in u if r[0] == sid]
-            if matched:
-                row = list(matched[0])
-                # matched row layout after DB change: student_id, first_name, last_name, status, phone, email, guardian_name, guardian_phone, year_came_up, section, shako, hanger, bag, coat, pants, instr_name, instr_serial, instr_case
-                vals = row
-            else:
-                # pad to expected length
-                vals = vals + [None] * (len(headers) - len(vals))
-
-        info = "\n".join(
-            f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
-            for i in range(len(headers))
-        )
-        self.show_printable_results("Student Info", info)
-        dialog.accept()
-
-    def _edit_single_student(self, stu, dialog):
-        ed = EditStudentDialog(stu)
-        ed.exec()
-        self.refresh_table()
-        dialog.accept()
-
-    def _view_section_students(self, students, section, dialog):
-        headers = [
-            "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
-            "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
-            "Shako #", "Hanger #", "Garment Bag", "Coat #", "Pants #",
-            "Instrument Name", "Instrument Serial", "Instrument Case"
-        ]
-        info = ""
-        # Normalize each student row to the joined layout used elsewhere
-        joined_rows = db.get_students_with_uniforms_and_instruments()
-        for stu in students:
-            vals = list(stu)
-            if len(vals) < len(headers):
-                sid = vals[0]
-                matched = [r for r in joined_rows if r[0] == sid]
-                if matched:
-                    vals = list(matched[0])
-                else:
-                    # Convert student-only order to joined order. students table order:
-                    # student_id, first_name, last_name, phone, email, year_came_up, status, guardian_name, guardian_phone, section
-                    # joined order after DB change: student_id, first_name, last_name, status, phone, email, guardian_name, guardian_phone, year_came_up, section
-                    vals = [
-                        stu[0],  # student_id
-                        stu[1],  # first_name
-                        stu[2],  # last_name
-                        stu[6] if len(stu) > 6 else None,  # status
-                        stu[3] if len(stu) > 3 else None,  # phone
-                        stu[4] if len(stu) > 4 else None,  # email
-                        stu[7] if len(stu) > 7 else None,  # guardian_name
-                        stu[8] if len(stu) > 8 else None,  # guardian_phone
-                        stu[5] if len(stu) > 5 else None,  # year_came_up
-                        stu[9] if len(stu) > 9 else None,  # section
-                    ]
-                    # pad uniform/instrument fields
-                    vals += [None] * (len(headers) - len(vals))
-            block = "\n".join(
-                f"{headers[i]}: {vals[i] if i < len(vals) and vals[i] is not None else ''}"
-                for i in range(len(headers))
-            )
-            info += block + "\n" + "-" * 40 + "\n"
-        self.show_printable_results(f"Section: {section}", info)
-        dialog.accept()
-
-    def _edit_section_student(self, list_widget, students, dialog):
-        idx = list_widget.currentRow()
-        if idx < 0:
-            return
-        ed = EditStudentDialog(students[idx])
-        ed.exec()
-        self.refresh_table()
-        dialog.accept()
-
-    # --------------------------------------------------------------------------
-    # Uniform methods
-    # --------------------------------------------------------------------------
-
     def add_uniform_popup(self):
         """
         Open dialog to add a new uniform part(s) without assigning to a student.
         Adds to separate tables based on which fields are filled.
+        Prevents duplicate entries based on unique identifiers.
         """
         dialog = AddUniformDialog(self)
-        if dialog.exec():
-            uniform_data = dialog.get_uniform_data()
-            conn, cursor = db.connect_db()
-            added = []
-            # Add shako if filled
-            if uniform_data['shako_num']:
-                cursor.execute('''INSERT INTO shakos (shako_num, status, notes) VALUES (?, ?, ?)''',
-                               (uniform_data['shako_num'], uniform_data['status'], uniform_data['notes']))
-                added.append('Shako')
-            # Add coat if filled
-            if uniform_data['coat_num']:
-                cursor.execute('''INSERT INTO coats (coat_num, hanger_num, status, notes) VALUES (?, ?, ?, ?)''',
-                               (uniform_data['coat_num'], uniform_data['hanger_num'], uniform_data['status'], uniform_data['notes']))
-                added.append('Coat')
-            # Add pants if filled
-            if uniform_data['pants_num']:
-                cursor.execute('''INSERT INTO pants (pants_num, status, notes) VALUES (?, ?, ?)''',
-                               (uniform_data['pants_num'], uniform_data['status'], uniform_data['notes']))
-                added.append('Pants')
-            # Add garment bag if filled
-            if uniform_data['garment_bag']:
-                cursor.execute('''INSERT INTO garment_bags (bag_num, status, notes) VALUES (?, ?, ?)''',
-                               (uniform_data['garment_bag'], uniform_data['status'], uniform_data['notes']))
-                added.append('Garment Bag')
-            conn.commit()
-            conn.close()
-            self.show_uniform_table_screen()
-            if added:
-                QMessageBox.information(self, "Success", f"Added: {', '.join(added)}")
+        if not dialog.exec():
+            return
+
+        uniform_data = dialog.get_uniform_data()
+        conn, cursor = db.connect_db()
+        added = []
+        duplicates = []
+
+        # Add shako if filled
+        if uniform_data['shako_num']:
+            existing = db.find_shako_by_number(uniform_data['shako_num'])
+            if existing:
+                duplicates.append(f"Shako #{uniform_data['shako_num']}")
             else:
-                QMessageBox.warning(self, "No Data", "No uniform parts were added. Please fill at least one field.")
+                cursor.execute(
+                    '''INSERT INTO shakos (shako_num, status, notes) VALUES (?, ?, ?)''',
+                    (uniform_data['shako_num'], uniform_data['status'], uniform_data['notes'])
+                )
+                added.append('Shako')
+
+        # Add coat if filled
+        if uniform_data['coat_num']:
+            existing = db.find_coat_by_number(uniform_data['coat_num'])
+            if existing:
+                duplicates.append(f"Coat #{uniform_data['coat_num']}")
+            else:
+                cursor.execute(
+                    '''INSERT INTO coats (coat_num, hanger_num, status, notes) VALUES (?, ?, ?, ?)''',
+                    (uniform_data['coat_num'], uniform_data['hanger_num'], uniform_data['status'], uniform_data['notes'])
+                )
+                added.append('Coat')
+
+        # Add pants if filled
+        if uniform_data['pants_num']:
+            existing = db.find_pants_by_number(uniform_data['pants_num'])
+            if existing:
+                duplicates.append(f"Pants #{uniform_data['pants_num']}")
+            else:
+                cursor.execute(
+                    '''INSERT INTO pants (pants_num, status, notes) VALUES (?, ?, ?)''',
+                    (uniform_data['pants_num'], uniform_data['status'], uniform_data['notes'])
+                )
+                added.append('Pants')
+
+        # Add garment bag if filled
+        if uniform_data['garment_bag']:
+            existing = db.find_bag_by_number(uniform_data['garment_bag'])
+            if existing:
+                duplicates.append(f"Bag {uniform_data['garment_bag']}")
+            else:
+                cursor.execute(
+                    '''INSERT INTO garment_bags (bag_num, status, notes) VALUES (?, ?, ?)''',
+                    (uniform_data['garment_bag'], uniform_data['status'], uniform_data['notes'])
+                )
+                added.append('Garment Bag')
+
+        conn.commit()
+        conn.close()
+        self.refresh_if_active(self.active_table)
+
+        if added:
+            msg = f"Added: {', '.join(added)}"
+            if duplicates:
+                msg += f"\nSkipped duplicates: {', '.join(duplicates)}"
+            QMessageBox.information(self, "Success", msg)
+        elif duplicates:
+            QMessageBox.warning(self, "Duplicates", f"No new items added.\nDuplicates: {', '.join(duplicates)}")
+        else:
+            QMessageBox.warning(self, "No Data", "No uniform parts were added. Please fill at least one field.")
 
     def assign_uniform_popup(self):
-        # Unified dialog for all fields
         dlg = QDialog(self)
         dlg.setWindowTitle("Assign Uniform")
         v = QVBoxLayout()
+
         sid_in = QLineEdit()
         sid_in.setPlaceholderText("Student ID (9 digits)")
         shako_in = QLineEdit()
         shako_in.setPlaceholderText("Shako # (blank if not assigning)")
-        # hanger is derived from coat; no separate hanger input
         coat_in = QLineEdit()
         coat_in.setPlaceholderText("Coat # (blank if not assigning)")
         pants_in = QLineEdit()
         pants_in.setPlaceholderText("Pants # (blank if not assigning)")
         bag_in = QLineEdit()
         bag_in.setPlaceholderText("Garment Bag (blank if not assigning)")
+
+        glove_cb = QComboBox()
+        glove_cb.addItems(["", "XS", "S", "M", "L", "XL"])
+        spat_cb = QComboBox()
+        spat_cb.addItems(["", "XS", "S", "M", "L", "XL"])
+
         v.addWidget(QLabel("Enter Student ID and any uniform parts to assign (leave blank for unassigned):"))
         v.addWidget(sid_in)
         v.addWidget(shako_in)
         v.addWidget(coat_in)
         v.addWidget(pants_in)
         v.addWidget(bag_in)
+        v.addWidget(QLabel("Glove Size:"))
+        v.addWidget(glove_cb)
+        v.addWidget(QLabel("Spat Size:"))
+        v.addWidget(spat_cb)
+
         h = QHBoxLayout()
         assign_btn = QPushButton("Assign")
         cancel_btn = QPushButton("Cancel")
@@ -1516,17 +1445,39 @@ class EquipmentManagementUI(QWidget):
             coat = coat_in.text().strip()
             pants = pants_in.text().strip()
             bag = bag_in.text().strip()
+            glove_size = glove_cb.currentText().strip() or None
+            spat_size = spat_cb.currentText().strip() or None
 
-            # Convert to int or None
             shako_num = int(shako) if shako else None
             coat_num = int(coat) if coat else None
             pants_num = int(pants) if pants else None
             bag_val = bag if bag else None
             hanger_num = None
 
+            # Check if student already has uniform parts
+            current = db.get_uniforms_by_student_id(sid)  # <-- implement this helper
+            already_assigned = []
+            if current:
+                if shako_num and current.get("shako_num"):
+                    already_assigned.append(f"Shako (#{current['shako_num']})")
+                if coat_num and current.get("coat_num"):
+                    already_assigned.append(f"Coat (#{current['coat_num']})")
+                if pants_num and current.get("pants_num"):
+                    already_assigned.append(f"Pants (#{current['pants_num']})")
+                if bag_val and current.get("garment_bag"):
+                    already_assigned.append(f"Bag ({current['garment_bag']})")
+
+            if already_assigned:
+                QMessageBox.warning(
+                    self,
+                    "Already Assigned",
+                    f"Student {sid} already has: {', '.join(already_assigned)}.\n"
+                    "Unassign first before reassigning."
+                )
+                return
+
             # Validate inventory
-            missing = []
-            not_available = []
+            missing, not_available = [], []
 
             if shako_num is not None:
                 if not db.find_shako_by_number(shako_num):
@@ -1590,8 +1541,16 @@ class EquipmentManagementUI(QWidget):
             if bag_val:
                 db.update_bag(bag_val, student_id=sid, status='Assigned')
 
+            # Update student glove/spat size
+            if glove_size is not None:
+                db.update_student(sid, "glove_size", glove_size)
+            if spat_size is not None:
+                db.update_student(sid, "spat_size", spat_size)
+
             QMessageBox.information(self, "Success", "Uniform assigned.")
             dlg.accept()
+            self.refresh_if_active(self.active_table)
+
         assign_btn.clicked.connect(do_assign)
         cancel_btn.clicked.connect(dlg.reject)
         dlg.exec()
@@ -1612,7 +1571,7 @@ class EquipmentManagementUI(QWidget):
         db.return_uniform_piece(sid)
 
         QMessageBox.information(self, "Success", "Uniform returned.")
-        self.show_uniform_table_screen()
+        self.refresh_if_active(self.active_table)
 
     def show_outstanding_uniforms(self):
         opts = ["<All>"] + self.sections
@@ -1641,11 +1600,181 @@ class EquipmentManagementUI(QWidget):
             db.delete_all_coats()
             db.delete_all_pants()
             db.delete_all_garment_bags()
-            self.show_uniform_table_screen()
+            self.refresh_if_active(self.active_table)
 
     # --------------------------------------------------------------------------
     # Instrument methods
     # --------------------------------------------------------------------------
+    def find_instrument_popup(self):
+        """
+        Opens a dialog to search for instruments by serial number and/or name.
+        Displays matching results in a table with clear row highlighting and edit functionality.
+        """
+        dlg = AddInstrumentDialog(self, find_mode=True, instruments=self.sections)
+        if not dlg.exec():
+            return
+
+        q = dlg.get_instrument_data()
+        serial_query = q.get('instrument_serial')
+        name_query = q.get('instrument_name')
+
+        found_rows = []
+        for r in db.get_all_instruments():
+            # Skip if both queries are blank
+            if not serial_query and not name_query:
+                continue
+
+            serial_match = r[3] == serial_query if serial_query else True
+            name_match = name_query.lower() in r[2].lower() if name_query and r[2] else True
+
+            # Only include rows that match all provided filters
+            if serial_query and name_query:
+                if serial_match and name_match:
+                    found_rows.append(r)
+            elif serial_query and serial_match:
+                found_rows.append(r)
+            elif name_query and name_match:
+                found_rows.append(r)
+
+
+
+        dlg2 = QDialog(self)
+        dlg2.setWindowTitle("Find Instrument Results")
+        v = QVBoxLayout()
+        if not found_rows:
+            v.addWidget(QLabel("No matching instrument found."))
+        else:
+            table = QTableWidget()
+            table.setColumnCount(9)
+            table.setHorizontalHeaderLabels([
+                "ID", "Student", "Name", "Serial", "Case", "Model",
+                "Condition", "Status", "Notes"
+            ])
+            table.setRowCount(len(found_rows))
+
+            # Manual row tracking
+            selected_row = [-1]
+
+            def highlight_row(row_index):
+                # Clear previous highlight
+                for r in range(table.rowCount()):
+                    for c in range(table.columnCount()):
+                        item = table.item(r, c)
+                        if item:
+                            item.setBackground(QColor("#1e1e1e"))
+
+                # Apply highlight to selected row
+                for c in range(table.columnCount()):
+                    item = table.item(row_index, c)
+                    if item:
+                        item.setBackground(QColor("#3c3c3c"))
+
+                selected_row[0] = row_index
+
+            for r, row in enumerate(found_rows):
+                for c, val in enumerate([
+                    row[0], row[1], row[2], row[3], row[4],
+                    row[5], row[6], row[7], row[8]
+                ]):
+                    item = QTableWidgetItem(str(val) if val is not None else "")
+                    table.setItem(r, c, item)
+
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.cellClicked.connect(lambda r, _: highlight_row(r))
+            v.addWidget(table)
+
+            h = QHBoxLayout()
+            edit_btn = QPushButton("Edit Selected")
+            close_btn = QPushButton("Close")
+            h.addWidget(edit_btn)
+            h.addWidget(close_btn)
+            v.addLayout(h)
+
+            def on_edit():
+                r = selected_row[0]
+                if r < 0:
+                    QMessageBox.warning(self, "Select", "Select a row to edit.")
+                    return
+
+                inst_id = int(table.item(r, 0).text())
+                ed = QDialog(self)
+                ed.setWindowTitle(f"Edit Instrument {inst_id}")
+                ed_v = QVBoxLayout()
+
+                instrument_cb = QComboBox()
+                instrument_cb.addItems(self.sections)
+                instrument_cb.setCurrentText(table.item(r, 2).text())
+
+                serial_in = QLineEdit(table.item(r, 3).text())
+                case_in = QLineEdit(table.item(r, 4).text())
+                model_in = QLineEdit(table.item(r, 5).text())
+
+                cond_cb = QComboBox()
+                cond_cb.addItems(["Excellent", "Good", "Fair", "Poor"])
+                cond_cb.setCurrentText(table.item(r, 6).text())
+
+                status_cb = QComboBox()
+                status_cb.addItems(["Available", "Assigned", "Maintenance", "Retired"])
+                status_cb.setCurrentText(table.item(r, 7).text())
+
+                notes_in = QLineEdit(table.item(r, 8).text())
+
+                ed_v.addWidget(QLabel("Instrument:"))
+                ed_v.addWidget(instrument_cb)
+                ed_v.addWidget(QLabel("Serial:"))
+                ed_v.addWidget(serial_in)
+                ed_v.addWidget(QLabel("Case:"))
+                ed_v.addWidget(case_in)
+                ed_v.addWidget(QLabel("Model:"))
+                ed_v.addWidget(model_in)
+                ed_v.addWidget(QLabel("Condition:"))
+                ed_v.addWidget(cond_cb)
+                ed_v.addWidget(QLabel("Status:"))
+                ed_v.addWidget(status_cb)
+                ed_v.addWidget(QLabel("Notes:"))
+                ed_v.addWidget(notes_in)
+
+                be_h = QHBoxLayout()
+                be_save = QPushButton("Save")
+                be_cancel = QPushButton("Cancel")
+                be_h.addWidget(be_save)
+                be_h.addWidget(be_cancel)
+                ed_v.addLayout(be_h)
+                ed.setLayout(ed_v)
+
+                def on_save():
+                    db.update_instrument_by_id(
+                        inst_id,
+                        name=instrument_cb.currentText().strip() or None,
+                        case=case_in.text().strip() or None,
+                        status=status_cb.currentText(),
+                        notes=notes_in.text().strip() or None,
+                        model=model_in.text().strip() or None,
+                        condition=cond_cb.currentText()
+                    )
+                    QMessageBox.information(self, "Saved", "Instrument updated.")
+                    ed.accept()
+
+                    # Update table row
+                    table.setItem(r, 2, QTableWidgetItem(instrument_cb.currentText().strip()))
+                    table.setItem(r, 3, QTableWidgetItem(serial_in.text().strip()))
+                    table.setItem(r, 4, QTableWidgetItem(case_in.text().strip()))
+                    table.setItem(r, 5, QTableWidgetItem(model_in.text().strip()))
+                    table.setItem(r, 6, QTableWidgetItem(cond_cb.currentText()))
+                    table.setItem(r, 7, QTableWidgetItem(status_cb.currentText()))
+                    table.setItem(r, 8, QTableWidgetItem(notes_in.text().strip()))
+
+                    highlight_row(r)  # Reapply highlight after update
+                    self.refresh_if_active("instruments")
+                be_save.clicked.connect(on_save)
+                be_cancel.clicked.connect(ed.reject)
+                ed.exec()
+
+            edit_btn.clicked.connect(on_edit)
+            close_btn.clicked.connect(dlg2.accept)
+
+        dlg2.setLayout(v)
+        dlg2.exec()
 
     def add_instrument_popup(self):
         """
@@ -1682,9 +1811,7 @@ class EquipmentManagementUI(QWidget):
             # Commit changes and close connection
             conn.commit()
             conn.close()
-
-            # Refresh the instrument table view
-            self.view_all_instruments_table()
+            self.refresh_if_active(self.active_table)
 
             # Notify the user of success
             QMessageBox.information(self, "Success", "New instrument added successfully!")
@@ -1795,7 +1922,10 @@ class EquipmentManagementUI(QWidget):
                 conn.close()
 
                 QMessageBox.information(self, "Success", f"Instrument ID {inst[0]} assigned.")
-                self.view_all_instruments_table()
+                self.refresh_if_active("instruments")
+                self.refresh_if_active("students")
+
+                self.refresh_if_active(self.active_table)
 
             if len(available) == 1:
                 assign_instrument(available[0])
@@ -1854,8 +1984,8 @@ class EquipmentManagementUI(QWidget):
             QMessageBox.warning(self, "Error", "No student found.")
             return
         db.return_instrument(sid)
-    # Debug output removed
-        self.view_all_instruments_table()
+        QMessageBox.information(self, "Success", "Instrument returned.")
+        self.refresh_if_active(self.active_table)
 
     def show_outstanding_instruments(self):
         """
@@ -1890,9 +2020,10 @@ class EquipmentManagementUI(QWidget):
 
         # Format results into a printable string
         msg = "\n".join(
-            f"{r[0]} {r[1]}: {r[2]} (Serial: {r[3]}, Case: {r[4]})"
+            f"{r[0]} {r[1]}: {r[2]} | Serial: {r[4]} | Case: {r[5]}"
             for r in rows
         )
+
 
         # Display results in a scrollable, printable dialog
         self.show_printable_results("Outstanding Instruments", msg)
@@ -1902,7 +2033,7 @@ class EquipmentManagementUI(QWidget):
         reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete ALL instruments? This cannot be undone.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             db.delete_all_instruments()
-            self.view_all_instruments_table()
+            self.refresh_if_active(self.active_table)
 
     # --------------------------------------------------------------------------
     # Backup & Restore
@@ -1929,7 +2060,8 @@ class EquipmentManagementUI(QWidget):
                 # --- Students ---
                 cursor.execute("""
                     SELECT student_id, first_name, last_name, phone, email,
-                        year_came_up, status, guardian_name, guardian_phone, section
+                        year_came_up, status, guardian_name, guardian_phone, section,
+                        glove_size, spat_size
                     FROM students
                 """)
                 for row in cursor.fetchall():
@@ -2011,16 +2143,16 @@ class EquipmentManagementUI(QWidget):
                     if not row:
                         continue
                     section = row[0].strip().upper()
-                    parts = [p if p != '' else None for p in row[1:]]
-
+                    parts = [p.strip() if p and p.strip() != '' else None for p in row[1:]]
                     try:
                         if section == 'STUDENTS':
                             cur.execute("""
                                 INSERT INTO students (
                                     student_id, first_name, last_name, phone, email,
-                                    year_came_up, status, guardian_name, guardian_phone, section
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, tuple(parts[:10]))
+                                    year_came_up, status, guardian_name, guardian_phone, section,
+                                    glove_size, spat_size
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, tuple(parts[:12]))
                             counts['STUDENTS'] += 1
 
                         elif section == 'UNIFORMS':
@@ -2075,7 +2207,7 @@ class EquipmentManagementUI(QWidget):
             conn.commit()
             conn.close()
 
-            self.refresh_table()
+            self.refresh_if_active(self.active_table)
             summary = "\n".join(f"{k}: {v}" for k, v in counts.items())
             QMessageBox.information(self, "Restore Complete",
                                     f"Backup restored successfully.\n\nRestored:\n{summary}")

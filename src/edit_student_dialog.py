@@ -35,18 +35,20 @@ class EditStudentDialog(QDialog):
         field_defs = [
             ("First Name",      1, "line",  None),
             ("Last Name",       2, "line",  None),
-            ("Phone",           3, "line",  None),
-            ("Email",           4, "line",  None),
-            ("Year Joined",     5, "line",  None),
-            ("Status",          6, "combo", ["Student", "Former", "Alumni"]),
-            ("Guardian Name",   7, "line",  None),
-            ("Guardian Phone",  8, "line",  None),
+            ("Status",          3, "combo", ["Student", "Former", "Alumni"]),
+            ("Phone",           4, "line",  None),
+            ("Email",           5, "line",  None),
+            ("Guardian Name",   6, "line",  None),
+            ("Guardian Phone",  7, "line",  None),
+            ("Year Joined",     8, "line",  None),
             ("Section",         9, "combo", [
                 "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
                 "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion",
                 "Flags"
             ])
         ]
+
+
 
         # Create input widgets and pre-fill them with existing student data
         for label, idx, wtype, options in field_defs:

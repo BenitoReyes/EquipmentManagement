@@ -1,6 +1,11 @@
 # ------------------------------------------------------------------------------
 # Migration/Initialization for Uniform Component Tables
 # ------------------------------------------------------------------------------
+import sqlite3
+import sys
+import os
+from collections import defaultdict
+
 def initialize_uniform_components():
     """
     Create all new uniform component tables if they do not exist.
@@ -9,9 +14,6 @@ def initialize_uniform_components():
     create_coat_table()
     create_pants_table()
     create_garment_bag_table()
-import sqlite3
-import sys
-import os
 
 def resource_path(relative_path):
     """
@@ -60,7 +62,9 @@ def create_student_table():
                 'Trumpet','Trombone','Euphonium','French Horn','Tuba',
                 'Flute','Clarinet','Saxophone','Bassoon','Oboe','Percussion',
                 'Flags'
-            ))
+            )),
+            glove_size TEXT,
+            spat_size TEXT
         )
     ''')
     conn.commit()
@@ -200,23 +204,21 @@ def create_instrument_table():
 # ------------------------------------------------------------------------------
 
 def get_student_by_id(student_id):
-    """
-    Retrieve a single student's details by their ID, including uniform and instrument info.
-    """
+    """Retrieve a single student's details by their ID, including uniform and instrument info."""
     conn, cursor = connect_db()
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
                s.year_came_up, s.section,
-               u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
+               u.shako_num, u.hanger_num, u.garment_bag,
+               s.glove_size, s.spat_size,
+               u.coat_num, u.pants_num,
                i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         LEFT JOIN uniforms u 
-               ON s.student_id = u.student_id 
-              AND u.status = 'Assigned'
+               ON s.student_id = u.student_id AND u.status = 'Assigned'
         LEFT JOIN instruments i 
-               ON s.student_id = i.student_id 
-              AND i.status = 'Assigned'
+               ON s.student_id = i.student_id AND i.status = 'Assigned'
         WHERE s.student_id = ?
     """, (student_id,))
     student = cursor.fetchone()
@@ -224,23 +226,21 @@ def get_student_by_id(student_id):
     return student
 
 def get_student_by_name(first_name, last_name):
-    """
-    Retrieve a single student's details by full name, including uniform and instrument info.
-    """
+    """Retrieve a single student's details by full name, including uniform and instrument info."""
     conn, cursor = connect_db()
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
                s.year_came_up, s.section,
-               u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
+               u.shako_num, u.hanger_num, u.garment_bag,
+               s.glove_size, s.spat_size,
+               u.coat_num, u.pants_num,
                i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         LEFT JOIN uniforms u 
-               ON s.student_id = u.student_id 
-              AND u.status = 'Assigned'
+               ON s.student_id = u.student_id AND u.status = 'Assigned'
         LEFT JOIN instruments i 
-               ON s.student_id = i.student_id 
-              AND i.status = 'Assigned'
+               ON s.student_id = i.student_id AND i.status = 'Assigned'
         WHERE s.first_name = ? AND s.last_name = ?
     """, (first_name, last_name))
     student = cursor.fetchone()
@@ -248,23 +248,21 @@ def get_student_by_name(first_name, last_name):
     return student
 
 def get_students_by_last_name(last_name):
-    """
-    Fetch all students matching a last name (case-insensitive), with uniforms and instruments.
-    """
+    """Fetch all students matching a last name (case-insensitive), with uniforms and instruments."""
     conn, cursor = connect_db()
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
                s.year_came_up, s.section,
-               u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
+               u.shako_num, u.hanger_num, u.garment_bag,
+               s.glove_size, s.spat_size,
+               u.coat_num, u.pants_num,
                i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         LEFT JOIN uniforms u 
-               ON s.student_id = u.student_id 
-              AND u.status = 'Assigned'
+               ON s.student_id = u.student_id AND u.status = 'Assigned'
         LEFT JOIN instruments i 
-               ON s.student_id = i.student_id 
-              AND i.status = 'Assigned'
+               ON s.student_id = i.student_id AND i.status = 'Assigned'
         WHERE s.last_name = ? COLLATE NOCASE
     """, (last_name,))
     students = cursor.fetchall()
@@ -272,23 +270,21 @@ def get_students_by_last_name(last_name):
     return students
 
 def get_students_by_section(section):
-    """
-    Fetch all students in a given section, with uniforms and instruments.
-    """
+    """Fetch all students in a given section, with uniforms and instruments."""
     conn, cursor = connect_db()
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
                s.year_came_up, s.section,
-               u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
+               u.shako_num, u.hanger_num, u.garment_bag,
+               s.glove_size, s.spat_size,
+               u.coat_num, u.pants_num,
                i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         LEFT JOIN uniforms u 
-               ON s.student_id = u.student_id 
-              AND u.status = 'Assigned'
+               ON s.student_id = u.student_id AND u.status = 'Assigned'
         LEFT JOIN instruments i 
-               ON s.student_id = i.student_id 
-              AND i.status = 'Assigned'
+               ON s.student_id = i.student_id AND i.status = 'Assigned'
         WHERE s.section = ?
     """, (section,))
     students = cursor.fetchall()
@@ -296,31 +292,62 @@ def get_students_by_section(section):
     return students
 
 def get_students_with_uniforms_and_instruments():
+    """
+    Returns a list of student records with assigned uniform and instrument info.
+    Each student appears once, and multiple instruments are aggregated into a single field.
+    """
     conn, cursor = connect_db()
+
+    # --- Query student + uniform info ---
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
                s.year_came_up, s.section,
                u.shako_num, u.hanger_num, u.coat_num, u.pants_num, u.garment_bag,
-               i.instrument_name, i.instrument_serial, i.instrument_case
+               s.glove_size, s.spat_size
         FROM students s
         LEFT JOIN uniforms u 
                ON s.student_id = u.student_id AND u.status = 'Assigned'
-        LEFT JOIN instruments i 
-               ON s.student_id = i.student_id AND i.status = 'Assigned'
         ORDER BY s.last_name, s.first_name
     """)
-    rows = cursor.fetchall()
+    student_rows = cursor.fetchall()
+
+    # --- Query instrument assignments separately ---
+    cursor.execute("""
+        SELECT student_id, instrument_name, instrument_serial, instrument_case
+        FROM instruments
+        WHERE status = 'Assigned'
+    """)
+    instrument_rows = cursor.fetchall()
+
+    # --- Build map: student_id → list of instrument summaries ---
+    instrument_map = defaultdict(list)
+    for sid, name, serial, case in instrument_rows:
+        label = f"{name} ({serial})" if serial else name
+        if case:
+            label += f" [{case}]"
+        instrument_map[sid].append(label)
+
     conn.close()
 
+    # --- Final headers ---
     headers = [
         "Student ID", "First Name", "Last Name", "Status",
         "Phone", "Email", "Guardian Name", "Guardian Phone",
         "Year Joined", "Section",
         "Shako #", "Hanger #", "Coat #", "Pants #", "Garment Bag",
-        "Instrument", "Serial #", "Case"
+        "Glove Size", "Spat Size",
+        "Instruments"
     ]
-    return rows, headers
+
+    # --- Normalize rows ---
+    normalized_rows = []
+    for row in student_rows:
+        sid = row[0]
+        instruments = ", ".join(instrument_map.get(sid, []))
+        normalized_rows.append(list(row) + [instruments])
+
+    return normalized_rows, headers
 
 def get_students():
     """
@@ -335,6 +362,7 @@ def get_students():
 def add_student(
     student_id, first_name, last_name, phone, email, year_came_up,
     status, guardian_name, guardian_phone, section,
+    glove_size=None, spat_size=None,
     shako_num=None, hanger_num=None, garment_bag=None,
     coat_num=None, pants_num=None,
     instrument_name=None, instrument_serial=None, instrument_case=None
@@ -347,11 +375,13 @@ def add_student(
     cursor.execute('''
         INSERT INTO students (
             student_id, first_name, last_name, phone, email, year_came_up,
-            status, guardian_name, guardian_phone, section
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, guardian_name, guardian_phone, section,
+            glove_size, spat_size
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         student_id, first_name, last_name, phone, email, year_came_up,
-        status, guardian_name, guardian_phone, section
+        status, guardian_name, guardian_phone, section,
+        glove_size, spat_size
     ))
 
     # Add uniform assignment if any uniform fields are provided
@@ -380,12 +410,15 @@ def add_student(
     conn.close()
 
 def add_or_update_student(student_id, first_name, last_name, status, section,
-                          phone, email, guardian_name, guardian_phone, year_came_up):
+                          phone, email, guardian_name, guardian_phone, year_came_up,
+                          glove_size=None, spat_size=None):
     conn, cursor = connect_db()
     cursor.execute("""
-        INSERT INTO students (student_id, first_name, last_name, status, section,
-                              phone, email, guardian_name, guardian_phone, year_came_up)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO students (
+            student_id, first_name, last_name, status, section,
+            phone, email, guardian_name, guardian_phone, year_came_up,
+            glove_size, spat_size
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id) DO UPDATE SET
             first_name=excluded.first_name,
             last_name=excluded.last_name,
@@ -395,9 +428,14 @@ def add_or_update_student(student_id, first_name, last_name, status, section,
             email=excluded.email,
             guardian_name=excluded.guardian_name,
             guardian_phone=excluded.guardian_phone,
-            year_came_up=excluded.year_came_up
-    """, (student_id, first_name, last_name, status, section,
-          phone, email, guardian_name, guardian_phone, year_came_up))
+            year_came_up=excluded.year_came_up,
+            glove_size=excluded.glove_size,
+            spat_size=excluded.spat_size
+    """, (
+        student_id, first_name, last_name, status, section,
+        phone, email, guardian_name, guardian_phone, year_came_up,
+        glove_size, spat_size
+    ))
     conn.commit()
     conn.close()
 
@@ -411,12 +449,13 @@ def update_student(student_id, field, new_value):
     valid_fields = {
         "first_name", "last_name", "phone", "email",
         "year_came_up", "status", "guardian_name",
-        "guardian_phone", "section"
+        "guardian_phone", "section", "glove_size", "spat_size"
     }
+
     status_options = {"Student", "Former", "Alumni"}
     section_options = {
         "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
-        "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion"
+        "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion", "Flags"
     }
 
     if field not in valid_fields:
@@ -505,28 +544,72 @@ def delete_student(student_id):
 
 def get_all_shakos():
     conn, cursor = connect_db()
-    cursor.execute("SELECT id, shako_num, status, student_id, notes FROM shakos ORDER BY shako_num")
+    cursor.execute("""
+        SELECT id, shako_num, status, student_id, notes
+        FROM shakos
+        ORDER BY
+            CASE status
+                WHEN 'Assigned'    THEN 1
+                WHEN 'Available'   THEN 2
+                WHEN 'Maintenance' THEN 3
+                WHEN 'Retired'     THEN 4
+            END,
+            id
+    """)
     results = cursor.fetchall()
     conn.close()
     return results
 
 def get_all_coats():
     conn, cursor = connect_db()
-    cursor.execute("SELECT id, coat_num, hanger_num, status, student_id, notes FROM coats ORDER BY coat_num")
+    cursor.execute("""
+        SELECT id, coat_num, hanger_num, status, student_id, notes
+        FROM coats
+        ORDER BY
+            CASE status
+                WHEN 'Assigned'    THEN 1
+                WHEN 'Available'   THEN 2
+                WHEN 'Maintenance' THEN 3
+                WHEN 'Retired'     THEN 4
+            END,
+            id
+    """)
     results = cursor.fetchall()
     conn.close()
     return results
 
 def get_all_pants():
     conn, cursor = connect_db()
-    cursor.execute("SELECT id, pants_num, status, student_id, notes FROM pants ORDER BY pants_num")
+    cursor.execute("""
+        SELECT id, pants_num, status, student_id, notes
+        FROM pants
+        ORDER BY
+            CASE status
+                WHEN 'Assigned'    THEN 1
+                WHEN 'Available'   THEN 2
+                WHEN 'Maintenance' THEN 3
+                WHEN 'Retired'     THEN 4
+            END,
+            id
+    """)
     results = cursor.fetchall()
     conn.close()
     return results
 
 def get_all_garment_bags():
     conn, cursor = connect_db()
-    cursor.execute("SELECT id, bag_num, status, student_id, notes FROM garment_bags ORDER BY bag_num")
+    cursor.execute("""
+        SELECT id, bag_num, status, student_id, notes
+        FROM garment_bags
+        ORDER BY
+            CASE status
+                WHEN 'Assigned'    THEN 1
+                WHEN 'Available'   THEN 2
+                WHEN 'Maintenance' THEN 3
+                WHEN 'Retired'     THEN 4
+            END,
+            id
+    """)
     results = cursor.fetchall()
     conn.close()
     return results
@@ -578,6 +661,30 @@ def get_uniform_id_by_student(student_id):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
+def get_uniforms_by_student_id(student_id):
+    """
+    Return all uniform parts currently assigned to a student as a dict.
+    Keys: shako_num, coat_num, pants_num, garment_bag
+    """
+    conn, cursor = connect_db()
+    cursor.execute("""
+        SELECT shako_num, coat_num, pants_num, garment_bag
+        FROM uniforms
+        WHERE student_id = ?
+    """, (student_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return {}
+
+    return {
+        "shako_num": row[0],
+        "coat_num": row[1],
+        "pants_num": row[2],
+        "garment_bag": row[3]
+    }
 
 def get_all_uniforms():
     """
@@ -665,39 +772,6 @@ def return_uniform_piece(student_id):
     if bag_num:
         update_bag(bag_num, student_id=None, status="Available")
 
-'''
-def assign_shako_to_student(shako_num, student_id):
-    """Mark a shako as assigned to a student."""
-    conn, cursor = connect_db()
-    cursor.execute("UPDATE shakos SET status='Assigned', student_id=? WHERE shako_num=?",
-                   (student_id, shako_num))
-    conn.commit()
-    conn.close()
-
-def assign_coat_to_student(coat_num, student_id):
-    """Mark a coat as assigned to a student."""
-    conn, cursor = connect_db()
-    cursor.execute("UPDATE coats SET status='Assigned', student_id=? WHERE coat_num=?",
-                   (student_id, coat_num))
-    conn.commit()
-    conn.close()
-
-def assign_pants_to_student(pants_num, student_id):
-    """Mark a pants entry as assigned to a student."""
-    conn, cursor = connect_db()
-    cursor.execute("UPDATE pants SET status='Assigned', student_id=? WHERE pants_num=?",
-                   (student_id, pants_num))
-    conn.commit()
-    conn.close()
-
-def assign_bag_to_student(bag_num, student_id):
-    """Mark a garment bag as assigned to a student."""
-    conn, cursor = connect_db()
-    cursor.execute("UPDATE garment_bags SET status='Assigned', student_id=? WHERE bag_num=?",
-                   (student_id, bag_num))
-    conn.commit()
-    conn.close()
-'''
 def assign_uniform_piece(student_id, **pieces):
     """
     Assign one or more uniform pieces to a student.

@@ -80,7 +80,7 @@ class AddStudentDialog(QDialog):
         guardian = self.inputs["Guardian Name"].text().strip()
         gphone   = self.inputs["Guardian Phone"].text().strip()
         section  = self.inputs["Section"].currentText()
-
+        
         # --- Validate Student ID ---
         if not sid.isdigit() or len(sid) != 9:
             QMessageBox.warning(self, "Validation Error",
