@@ -45,29 +45,53 @@ pip install pillow                  # for PIL Image support
 
 Project Structure
 EquipmentManagement/
+
 ├─ .idea/                         # IDE settings
+
 ├─ .vscode/                       # VSCode workspace settings
+
 ├─ build/                         # Build output (PyInstaller)
+
 ├─ dist/                          # Distribution artifacts
+
 ├─ Database/
+
 │  └─ students.db                 # SQLite database file
+
 ├─ node_modules/                  # If packaging web assets
+
 ├─ src/
+
 │  ├─ __pycache__/                # Compiled bytecode
+
 │  ├─ add_instrument_dialog.py    # Instrument-assignment popup
+
 │  ├─ add_student_dialog.py       # Student-creation popup
+
 │  ├─ add_uniform_dialog.py       # Uniform-assignment popup
+
 │  ├─ db.py                       # SQLite connection & queries
+
 │  ├─ edit_student_dialog.py      # Student-edit popup
+
 │  ├─ main.py                     # Application entry point
+
 │  ├─ ui.py                       # Main Qt UI logic
+
 │  └─ utils.py                    # Helper functions
+
 ├─ main.spec                      # PyInstaller spec file
+
 ├─ package.json                   # Node/web config (if any)
+
 ├─ package-lock.json              # Locked Node modules
+
 ├─ requirements.txt               # Python dependencies
+
 ├─ README.md                      # This file
+
 └─ styles.qss                     # Qt stylesheet
+
 
 
 
