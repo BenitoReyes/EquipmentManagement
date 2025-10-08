@@ -1,4 +1,5 @@
-EquipmentManagement
+# EquipmentManagement
+
 A desktop application for managing student equipment—uniforms, instruments, and related inventory—built with Python, PyQt, and SQLite. It provides a full-screen UI for viewing and assigning items, prevents double-assignments, and offers status-based sorting (Assigned → Available → Maintenance → Retired).
 
 Table of Contents
@@ -12,7 +13,7 @@ Table of Contents
 - Extending & Contributing
 - License
 
-Features
+## Features
 - Student management (lookup by 9-digit ID)
 - Inventory tracking for:
 - Instruments (type, serial, case, status)
@@ -22,12 +23,12 @@ Features
 - Full-screen, collapsible groups per component
 - Real-time UI refresh after any change
 
-Prerequisites
+## Prerequisites
 - Python 3.13
 - PyQt6 (or PySide6)
 - SQLite3 (bundled with Python)
 
-Installation
+## Installation
 - Clone the repository
 git clone https://github.com/benny/EquipmentManagement.git
 cd EquipmentManagement
@@ -43,7 +44,8 @@ pip install pillow                  # for PIL Image support
 
 
 
-Project Structure
+## Project Structure
+
 EquipmentManagement/
 
 ├─ .idea/                         # IDE settings
@@ -107,23 +109,24 @@ Initializes the Qt application, loads the main window, and connects to the datab
 - Assign-popup dialogs with double-booking checks
 - Table-refresh logic
 
-Database Schema
+## Database Schema
 All tables live in an SQLite database (equipment.db by default). Core tables:
-## students
+### students
 - student_id (PK), first_name, last_name, glove_size, spat_size
-## uniforms
+### uniforms
 - id (PK), student_id (FK → students),
 shako_num, coat_num, pants_num, garment_bag, hanger_num,
 status, notes
-## shakos, coats, pants, garment_bags
+### shakos, coats, pants, garment_bags
 - Each has id (PK), part-specific fields (e.g. shako_num or coat_num),
 status, student_id (FK → students), notes
-## instruments
+### instruments
 - id (PK), student_id (FK → students), type, serial, instrument_case,
 status, notes
+
 [Student Database ERD](Database ERD.md)
 
-Running the Application
+## Running the Application
 Use your Python interpreter to launch the main module. For example, from PowerShell:
 PS C:\Users\benny\Documents\GitHub\EquipmentManagement> `
   & 'c:\Python313\python.exe' `
@@ -136,7 +139,7 @@ python src/main.py
 
 
 
-Usage
+## Usage
 - Uniform Screen
 - Collapsible groups for Shakos, Coats, Pants, Garment Bags
 - Assign via “Assign Uniform” popup (9-digit ID + parts)
