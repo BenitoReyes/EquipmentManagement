@@ -1,0 +1,1 @@
+[Student ERD.pdf](https://github.com/user-attachments/files/22758334/Student.ERD.pdf)
