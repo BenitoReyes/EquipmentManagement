@@ -124,7 +124,7 @@ status, student_id (FK → students), notes
 - id (PK), student_id (FK → students), type, serial, instrument_case,
 status, notes
 
-[Student Database ERD](Database ERD.md)
+[Student Database ERD](https://github.com/BenitoReyes/EquipmentManagement/blob/main/Database%20ERD.md)
 
 ## Running the Application
 Use your Python interpreter to launch the main module. For example, from PowerShell:
