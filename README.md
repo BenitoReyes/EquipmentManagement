@@ -130,4 +130,5 @@ Extending & Contributing
 
 ## License
 
-This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+© 2025 Benito Reyes 
+Licensed under CC BY-NC-SA 4.0. See [LICENSE](LICENSE) for full terms.
