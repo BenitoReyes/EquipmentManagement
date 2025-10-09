@@ -1,92 +1,127 @@
-from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QPushButton, QFormLayout, QMessageBox
+# Import necessary PyQt6 widgets and layout classes
+from PyQt6.QtWidgets import (
+    QDialog, QLabel, QLineEdit, QComboBox, QPushButton, QFormLayout, QMessageBox
+)
+
+# Import your database module to perform updates
 import db
-# Define a dialog window for editing an existing student's details
+
 class EditStudentDialog(QDialog):
+    """
+    This dialog allows the user to edit an existing student's core details.
+    It pre-fills the form with current data and updates the database on save.
+    """
+
     def __init__(self, student_data):
         super().__init__()
 
+        # Set the window title
         self.setWindowTitle("Edit Student Details")
-        # Store the student ID for reference during updates
-        self.student_id = student_data[0]  # Assuming ID is at index 0
 
-        # Create a form layout to organize labels and input fields
+        # Store the student ID for reference during updates
+        # student_data is a tuple matching the students table columns:
+        # 0: ID, 1: First Name, 2: Last Name, 3: Phone, 4: Email,
+        # 5: Year Joined, 6: Status, 7: Guardian Name, 8: Guardian Phone, 9: Section
+        self.student_id = student_data[0]
+
+        # Create a form layout to organize fields vertically
         layout = QFormLayout()
 
-        # Dictionary to hold QLineEdit widgets keyed by field name
+        # Dictionary to hold input widgets keyed by field label
         self.inputs = {}
 
         # Define editable fields and their corresponding index in student_data
-        fields = [
-            ("First Name", 1), ("Last Name", 2), ("Section", 3), ("Phone", 4), ("Email", 5),
-            ("Shako #", 6), ("Hanger #", 7), ("Garment Bag", 8), ("Coat #", 9), ("Pants #", 10),
-            ("Spats Size", 11), ("Gloves Size", 12), ("Guardian Name", 13), ("Guardian Phone", 14),
-            ("Instrument Name", 15), ("Instrument Serial", 16), ("Instrument Case", 17),
-            ("Year Came up", 18)
+        # Each tuple: (label, index in student_data, widget type, options if combo)
+        field_defs = [
+            ("First Name",      1, "line",  None),
+            ("Last Name",       2, "line",  None),
+            ("Status",          3, "combo", ["Student", "Former", "Alumni"]),
+            ("Phone",           4, "line",  None),
+            ("Email",           5, "line",  None),
+            ("Guardian Name",   6, "line",  None),
+            ("Guardian Phone",  7, "line",  None),
+            ("Year Joined",     8, "line",  None),
+            ("Section",         9, "combo", [
+                "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
+                "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion",
+                "Flags"
+            ])
         ]
 
-        # Create input fields and pre-fill them with existing student data
-        for field_name, index in fields:
-            self.inputs[field_name] = QLineEdit()
 
-            # Populate with existing value or empty string if None
-            self.inputs[field_name].setText(str(student_data[index]) if student_data[index] is not None else "")
-            layout.addRow(QLabel(field_name + ":"), self.inputs[field_name])
 
-        # Create a submit button and connect it to the update logic
-        self.submit_button = QPushButton("Save Changes")
-        self.submit_button.clicked.connect(self.update_student)
-        layout.addWidget(self.submit_button)
+        # Create input widgets and pre-fill them with existing student data
+        for label, idx, wtype, options in field_defs:
+            if wtype == "combo":
+                widget = QComboBox()
+                widget.addItems(options)  # Populate dropdown
+                current = student_data[idx] or ""
+                if current in options:
+                    widget.setCurrentText(current)  # Set current value
+            else:
+                widget = QLineEdit()
+                val = student_data[idx]
+                widget.setText(str(val) if val is not None else "")  # Pre-fill text
 
-        # Apply the layout to the dialog
+            self.inputs[label] = widget
+            layout.addRow(QLabel(f"{label}:"), widget)
+
+        # Add Save Changes button
+        save_btn = QPushButton("Save Changes")
+        save_btn.clicked.connect(self.update_student)  # Trigger update logic
+        layout.addWidget(save_btn)
+
+        # Apply layout to the dialog
         self.setLayout(layout)
 
-    # Method to validate and save updated student details
     def update_student(self):
-        """Save updated details with validation."""
-        
-        # Maps display field names to database column names
-        FIELD_MAPPING = {
-            "First Name": "first_name",
-            "Last Name": "last_name",
-            "Section": "section",
-            "Phone": "phone",
-            "Email": "email",
-            "Shako #": "shako_num",
-            "Hanger #": "hanger_num",
-            "Garment Bag": "garment_bag",
-            "Coat #": "coat_num",
-            "Pants #": "pants_num",
-            "Spats Size": "spats_size",
-            "Gloves Size": "gloves_size",
-            "Guardian Name": "guardian_name",
-            "Guardian Phone": "guardian_phone",
-            "Instrument Name": "instrument_name",
-            "Instrument Serial": "instrument_serial",
-            "Instrument Case": "instrument_case",
-            "Year Came up": "year_came_up"
-        }
+        """
+        Validate inputs and update the student record in the database.
+        Each field is updated individually using db.update_student().
+        """
 
-        # Validate Student ID
-        if not str(self.student_id).isdigit() or len(str(self.student_id)) != 9:
+        # --- Validate Student ID format ---
+        sid = str(self.student_id)
+        if not sid.isdigit() or len(sid) != 9:
             QMessageBox.warning(self, "Error", "Student ID must be exactly 9 digits.")
             return
 
-        # Validate Phone Number if not empty
+        # --- Validate phone number (optional) ---
         phone = self.inputs["Phone"].text().strip()
         if phone and (not phone.isdigit() or len(phone) != 10):
-            QMessageBox.warning(self, "Error", "Phone number must be exactly 10 digits or left blank.")
+            QMessageBox.warning(self, "Error", "Phone must be 10 digits or blank.")
             return
 
-        # Validate Guardian Phone Number if not empty
-        guardian_phone = self.inputs["Guardian Phone"].text().strip()
-        if guardian_phone and (not guardian_phone.isdigit() or len(guardian_phone) != 10):
-            QMessageBox.warning(self, "Error", "Guardian phone number must be exactly 10 digits or left blank.")
+        # --- Validate guardian phone number (optional) ---
+        gphone = self.inputs["Guardian Phone"].text().strip()
+        if gphone and (not gphone.isdigit() or len(gphone) != 10):
+            QMessageBox.warning(self, "Error", "Guardian Phone must be 10 digits or blank.")
             return
 
-        # Update all fields
-        for field, input_widget in self.inputs.items():
-            value = input_widget.text().strip()
-            db.update_student(self.student_id, FIELD_MAPPING[field], value)
+        # --- Map field labels to database column names ---
+        FIELD_MAPPING = {
+            "First Name":     "first_name",
+            "Last Name":      "last_name",
+            "Phone":          "phone",
+            "Email":          "email",
+            "Year Joined":    "year_came_up",
+            "Status":         "status",
+            "Guardian Name":  "guardian_name",
+            "Guardian Phone": "guardian_phone",
+            "Section":        "section"
+        }
 
+        # --- Update each field in the database ---
+        for label, widget in self.inputs.items():
+            col = FIELD_MAPPING[label]
+            # Get value from widget depending on type
+            if isinstance(widget, QComboBox):
+                val = widget.currentText()
+            else:
+                val = widget.text().strip()
+            # Update the field in the database
+            db.update_student(self.student_id, col, val)
+
+        # Show success message and close dialog
         QMessageBox.information(self, "Success", "Student details updated!")
         self.accept()
