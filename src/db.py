@@ -25,11 +25,8 @@ def resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# Use this if you're running the code in vscode or any other IDE
-DB_NAME = resource_path("Database/students.db")
 
-# Use this if you're putting the DB alongside the .exe with it gets packaged
-#DB_NAME = os.path.join(os.path.dirname(sys.executable), "Database", "students.db")
+DB_NAME = resource_path("Database/students.db")
 # Establishes a connection to the database and returns both the connection and cursor
 
 def connect_db():

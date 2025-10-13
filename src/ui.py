@@ -157,7 +157,7 @@ class EquipmentManagementUI(QWidget):
         QMessageBox.information(
             self, "About This App",
             "Made by: Benito Reyes\nFall '21 Trumpet \nKKPSI DI,, SPR '24 Ace\n"
-            "Code: https://github.com/BenitoReyes/EquipmentManagement"
+            "License and code can be found at: https://github.com/BenitoReyes/EquipmentManagement"
         )
 
     def sanitize(self, value):

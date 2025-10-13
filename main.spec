@@ -5,7 +5,7 @@ a = Analysis(
     ['src\\main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('Database/students.db', 'Database'), ('styles.qss', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

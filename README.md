@@ -137,6 +137,9 @@ PS C:\Users\benny\Documents\GitHub\EquipmentManagement> `
 Or simply:
 python src/main.py
 
+## Packaging the Application
+Application can be packaged into an .exe for practical use by running the command:
+python -m PyInstaller src/main.py --onefile --windowed --add-data "Database/students.db;Database" --add-data "styles.qss;."
 
 
 ## Usage
