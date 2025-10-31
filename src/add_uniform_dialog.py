@@ -1,4 +1,6 @@
-# Import necessary PyQt6 widgets and layout classes
+# Standard library imports
+
+# Third-party imports
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QSpinBox, QComboBox
@@ -6,7 +8,80 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 class AddUniformDialog(QDialog):
+    """
+    Dialog for adding new uniforms or searching existing inventory.
+    
+    This dialog provides a dual-mode interface for:
+    1. Adding new uniform components to inventory
+    2. Searching existing uniform components
+    
+    Uniform Components:
+    - Shakos (numbered headwear)
+    - Coats with hangers
+    - Pants (numbered)
+    - Garment Bags
+    
+    Add Mode Features:
+    - Component number entry
+    - Hanger tracking
+    - Notes field
+    - Status setting
+    - Multi-component entry
+    
+    Search Mode Features:
+    - Component number search
+    - Partial criteria matching
+    - Multi-component search
+    - Results filtering
+    
+    Data Management:
+    - Number validation
+    - Optional fields
+    - Status tracking
+    - Notes handling
+    
+    Interface Elements:
+    - Numeric inputs
+    - Text fields
+    - Action buttons
+    - Clear labeling
+    
+    Note:
+        This dialog adapts its interface and behavior based on
+        the find_mode parameter to support both inventory
+        addition and search operations
+    """
     def __init__(self, parent=None, find_mode=False):
+        """
+        Initialize and configure the uniform dialog.
+        
+        This constructor configures the dialog based on its mode:
+        1. Parent widget association
+        2. Operation mode setting
+        3. Window title configuration
+        4. Appropriate UI setup
+        
+        Args:
+            parent (QWidget, optional): Parent widget for this dialog.
+                Defaults to None for top-level window.
+            find_mode (bool, optional): If True, configures for search operations.
+                If False, configures for new uniform entry.
+                Defaults to False.
+        
+        Dialog Configuration:
+        - Parent hierarchy setup
+        - Mode flag setting
+        - Title customization
+        - UI layout selection
+        
+        Mode-based Features:
+        - Add mode: Complete component entry
+        - Find mode: Search-focused interface
+        
+        Note:
+            The find_mode parameter determines which UI setup
+            method is called and thus the entire dialog behavior
+        """
         super().__init__(parent)
         self.find_mode = find_mode
         self.setWindowTitle("Find Uniform" if find_mode else "Add New Uniform")
@@ -17,6 +92,43 @@ class AddUniformDialog(QDialog):
             self.setup_ui_search()
 
     def setup_ui(self):
+        """
+        Build and configure the dialog's UI for add mode.
+        
+        This method creates a comprehensive input form with:
+        1. Component number inputs
+        2. Optional fields
+        3. Notes capability
+        4. Action buttons
+        
+        Form Structure:
+        - Vertical layout with field groups
+        - Each group uses horizontal layout
+        - Consistent label placement
+        - Aligned input fields
+        
+        Input Components:
+        - Shako Number (0-9999)
+        - Hanger Number (0-9999)
+        - Coat Number (0-9999)
+        - Pants Number (0-9999)
+        - Garment Bag (text)
+        - Notes field (text)
+        
+        Control Elements:
+        - Save button
+        - Cancel button
+        
+        Layout Management:
+        - Nested layouts
+        - Widget alignment
+        - Consistent spacing
+        - Visual grouping
+        
+        Note:
+            This UI is optimized for adding new uniform
+            components with full details and validation
+        """
         layout = QVBoxLayout()
 
         # --- Shako Number ---
@@ -84,6 +196,40 @@ class AddUniformDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
 
     def setup_ui_search(self):
+        """
+        Build and configure the dialog's UI for search mode.
+        
+        This method creates a focused search interface with:
+        1. Component search fields
+        2. Simple layout
+        3. Search controls
+        
+        Form Structure:
+        - Streamlined vertical layout
+        - Search-focused fields
+        - Clear visual hierarchy
+        - Essential controls only
+        
+        Search Components:
+        - Shako Number search
+        - Coat Number search
+        - Pants Number search
+        - Garment Bag search
+        
+        Control Elements:
+        - Find button
+        - Cancel button
+        
+        Layout Features:
+        - Simplified layout
+        - Direct input fields
+        - Clear labeling
+        - Search-oriented design
+        
+        Note:
+            This UI is optimized for quick uniform searches
+            with minimal required fields
+        """
         layout = QVBoxLayout()
 
         # --- Shako Number ---
@@ -134,7 +280,44 @@ class AddUniformDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
 
     def get_uniform_data(self):
-        """Returns all uniform-related fields, safely handling add vs. find mode."""
+        """
+        Collect and normalize uniform data from the form.
+        
+        This method processes input fields based on mode:
+        1. Collect all field values
+        2. Handle mode-specific fields
+        3. Normalize empty values
+        4. Format for database
+        
+        Returns:
+            dict: Normalized uniform data with fields:
+                All modes:
+                - shako_num: int or None
+                - coat_num: int or None
+                - pants_num: int or None
+                - garment_bag: str or None
+                
+                Add mode only:
+                - hanger_num: int or None
+                - status: str ('Available')
+                - notes: str or None
+        
+        Data Processing:
+        - Zero values normalized to None
+        - Empty strings normalized to None
+        - Whitespace trimming
+        - Mode-specific field inclusion
+        
+        Field Handling:
+        - SpinBox values: 0 converted to None
+        - Text inputs: stripped and None if empty
+        - Status: 'Available' for new items
+        - Notes: Optional in add mode
+        
+        Note:
+            This method ensures database-compatible data format
+            while handling differences between add and find modes
+        """
         shako = self.shako_input.value()
         coat = self.coat_input.value()
         pants = self.pants_input.value()

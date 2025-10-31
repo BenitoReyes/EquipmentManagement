@@ -30,11 +30,57 @@ import sys
 import os
 
 def resource_path(relative_path):
+    """
+    Generate an absolute path that works in both development and PyInstaller modes.
+    
+    This function handles path resolution for accessing resources (like images,
+    stylesheets, etc.) in both development environment and after PyInstaller
+    packaging. It accounts for the different file locations when running from
+    source vs running from a bundled executable.
+    
+    Key Features:
+    - Development mode: Uses current directory as base
+    - PyInstaller mode: Uses _MEIPASS temp directory
+    - Path joining with proper OS separators
+    - Absolute path resolution
+    
+    Args:
+        relative_path (str): The relative path to the resource from project root
+        
+    Returns:
+        str: Absolute path to the resource that works in both dev and prod
+        
+    Note:
+        Critical for accessing files after PyInstaller packaging since the
+        normal file system is not available in the bundled executable
+    """
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
+
 def load_stylesheet():
-    """Load styles.qss from project root if present, otherwise return empty string."""
+    """
+    Load and return the application's QSS stylesheet content.
+    
+    This function attempts to load the styles.qss file from the project root
+    directory or PyInstaller bundle. The stylesheet defines the visual
+    appearance of the entire application including colors, fonts, spacing,
+    and custom widget styles.
+    
+    Returns:
+        str: The contents of styles.qss if found and readable,
+             empty string if file is missing or there's an error
+             
+    Error Handling:
+    - File not found: Returns empty string
+    - Permission errors: Returns empty string
+    - Encoding issues: Returns empty string
+    
+    Note:
+        - Uses resource_path() to handle both dev and prod environments
+        - Assumes UTF-8 encoding for the QSS file
+        - Silently fails to preserve application functionality
+    """
     try:
         p = resource_path('styles.qss')
         if os.path.exists(p):
@@ -44,8 +90,75 @@ def load_stylesheet():
         pass
     return ""
 class EquipmentManagementUI(QWidget):
+    """
+    Main application window for the Equipment Management System.
+    
+    This class serves as the primary UI container and controller for the
+    equipment management application. It provides a comprehensive interface
+    for managing students, uniforms, and musical instruments through
+    a menu-driven system of operations.
+    
+    Features:
+    - Student management (add, update, delete, find, import)
+    - Uniform control (add, find, assign, return, view)
+    - Instrument tracking (add, find, assign, return, view)
+    - Bar/QR code generation for student identification
+    - CSV import/export capabilities
+    - Table views for data visualization
+    - Printing support for reports and labels
+    
+    UI Structure:
+    - Top bar: Application title
+    - Menu bar: Student and Equipment operation menus
+    - Main area: Dynamic content (tables, forms, dialogs)
+    - Context-specific dialogs for data entry
+    
+    Data Flow:
+    - UI elements capture user input
+    - Validation occurs at the dialog level
+    - Database operations handled through db.py
+    - Results displayed in tables or message boxes
+    
+    Dependencies:
+    - PyQt6 for all UI components
+    - qrcode/barcode for code generation
+    - PIL for image processing
+    - Custom dialog classes for data entry
+    - Database module (db.py) for data operations
+    """
     
     def __init__(self):
+        """
+        Initialize the main application window and set up all UI components.
+        
+        This method:
+        1. Configures the main window properties
+        2. Sets up the section list for instrument categories
+        3. Creates and configures the menu structure
+        4. Establishes the layout hierarchy
+        5. Initializes all action handlers
+        
+        Window Setup:
+        - Title: "Equipment Management"
+        - Size: 900x700 pixels
+        - Position: 200,200 on screen
+        - Style: Loads from styles.qss
+        
+        Menu Structure:
+        - Student Operations:
+            * Add/Update/Delete Student
+            * Find Student
+            * Generate Bar/QR codes
+            * Import from CSV
+            * View Students Table
+        - Equipment Operations:
+            * Uniform Management
+                - Add/Find/Assign/Return
+                - View Outstanding/All
+            * Instrument Management
+                - Add/Find/Assign/Return
+                - View Outstanding/All
+        """
         super().__init__()
         self.setWindowTitle("Equipment Management")
         self.setGeometry(200, 200, 900, 700)
@@ -134,6 +247,29 @@ class EquipmentManagementUI(QWidget):
         self.refresh_table()
 
     def delete_all_dialog(self):
+        """
+        Display a dialog for bulk deletion of database records.
+        
+        This administrative function presents a dialog with options to delete
+        all records of a specific type (students, uniforms, or instruments).
+        Implements a safety mechanism by requiring explicit selection and
+        confirmation.
+        
+        Features:
+        - Separate buttons for each data type
+        - Cancel option to prevent accidental deletion
+        - Clear visual distinction between destructive and safe actions
+        
+        Dialog Options:
+        - Delete All Students: Removes all student records
+        - Delete All Uniforms: Removes all uniform records
+        - Delete All Instruments: Removes all instrument records
+        - Cancel: Closes dialog without action
+        
+        Note:
+            This is a destructive operation that cannot be undone.
+            Consider creating a backup before proceeding.
+        """
         from PyQt6.QtWidgets import QMessageBox
         msg = QMessageBox(self)
         msg.setWindowTitle("Delete ALL Data")
@@ -154,6 +290,14 @@ class EquipmentManagementUI(QWidget):
             self.close()
 
     def show_about_dialog(self):
+        """
+        Display the application's about dialog with author and license information.
+        
+        Shows a message box containing:
+        - Author information
+        - Organization affiliation
+        - Repository/license location
+        """
         QMessageBox.information(
             self, "About This App",
             "Made by: Benito Reyes\nFall '21 Trumpet \nKKPSI DI,, SPR '24 Ace\n"
@@ -161,9 +305,46 @@ class EquipmentManagementUI(QWidget):
         )
 
     def sanitize(self, value):
+        """
+        Sanitize a value for display or database storage.
+        
+        Handles common edge cases in user input and database values:
+        - None values converted to empty string
+        - "None" string (case insensitive) converted to empty string
+        - Whitespace-only strings converted to empty string
+        - All other values converted to string representation
+        
+        Args:
+            value: Any value to sanitize
+            
+        Returns:
+            str: The sanitized string value
+        """
         return "" if value is None or str(value).strip().lower() == "none" else str(value)
 
     def show_printable_results(self, title, text):
+        """
+        Display results in a printable dialog window.
+        
+        Creates a modal dialog containing:
+        - Text display area with provided content
+        - Print button that opens system print dialog
+        - Close button to dismiss the window
+        
+        The dialog supports:
+        - Text selection/copying
+        - Direct printing
+        - Printer selection
+        - Print preview
+        
+        Args:
+            title (str): Window title for the dialog
+            text (str): Content to display and potentially print
+            
+        Note:
+            Uses system print dialog for maximum compatibility
+            and user familiarity with print options
+        """
         """Show a printable dialog with text and a Print button."""
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
@@ -196,6 +377,32 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
     
     def show_students_table(self):
+        """
+        Display and initialize the main students table view.
+        
+        This method:
+        1. Sets the active table context to "students"
+        2. Cleans up any existing table widgets
+        3. Creates or reuses the student table widget
+        4. Triggers a refresh of the table data
+        
+        UI Components:
+        - QTableWidget for displaying student records
+        - Automatic column sizing
+        - Sortable columns
+        - Selection support for operations
+        
+        Table Features:
+        - Shows all student information
+        - Displays assigned uniforms
+        - Shows current instruments
+        - Updates in real-time
+        - Supports sorting and filtering
+        
+        Note:
+            This is the default view shown when the application starts
+            and can be returned to via the "View Students Table" menu option
+        """
         self.active_table = "students"
 
         # Clear other widgets from layout
@@ -213,6 +420,33 @@ class EquipmentManagementUI(QWidget):
         self.refresh_table()
 
     def refresh_table(self):
+        """
+        Refresh the currently active table view with latest data.
+        
+        This method performs a complete table refresh by:
+        1. Retrieving fresh data from the database
+        2. Rebuilding the table structure
+        3. Populating all rows and columns
+        4. Adjusting column widths
+        5. Applying sorting and formatting
+        
+        Table Types:
+        - Students table (default)
+        - Uniforms table
+        - Instruments table
+        
+        Data Flow:
+        1. Determines active table type
+        2. Fetches appropriate data from database
+        3. Configures columns based on data type
+        4. Populates rows with formatted data
+        5. Applies visual styling and layout
+        
+        Note:
+            This method is called automatically after any operation
+            that modifies the database to ensure the display is
+            always current
+        """
         self.active_table = "students"
 
         rows, headers = db.get_students_with_uniforms_and_instruments()
@@ -223,10 +457,13 @@ class EquipmentManagementUI(QWidget):
         self.student_table.setHorizontalHeaderLabels(headers)
         self.student_table.setRowCount(len(rows))
 
-        for r, row in enumerate(rows):
+        for r, row_tuple in enumerate(rows):
+            # Convert tuple to list so we can modify it
+            row = list(row_tuple)
+            
             # Normalize row length
             if len(row) < len(headers):
-                row += [None] * (len(headers) - len(row))
+                row.extend([None] * (len(headers) - len(row)))
             elif len(row) > len(headers):
                 print(f"Warning: Row {r} has extra fields. Trimming.")
                 row = row[:len(headers)]
@@ -252,6 +489,30 @@ class EquipmentManagementUI(QWidget):
             self.student_table.sortItems(last_name_index)
 
     def refresh_if_active(self, table_name):
+        """
+        Conditionally refresh a table if it's currently active.
+        
+        This method provides selective refresh functionality by:
+        1. Checking if the specified table is currently active
+        2. Calling the appropriate refresh method if it is
+        
+        This prevents unnecessary refreshes of inactive tables
+        while ensuring the active view stays current.
+        
+        Args:
+            table_name (str): Name of the table to potentially refresh
+                Valid values: "students", "uniforms", "instruments"
+        
+        Table Handling:
+        - students: Uses refresh_table()
+        - uniforms: Uses show_uniform_table_screen()
+        - instruments: Uses view_all_instruments_table()
+        
+        Note:
+            This is an optimization method that prevents unnecessary
+            database queries and UI updates for tables that aren't
+            currently visible
+        """
         if self.active_table == table_name:
             if table_name == "students":
                 self.refresh_table()
@@ -262,7 +523,31 @@ class EquipmentManagementUI(QWidget):
 
     def view_all_uniforms_table(self):
         """
-        Show all uniform records in the table.
+        Display a comprehensive table of all uniform records.
+        
+        This method provides a complete view of the uniform inventory by:
+        1. Fetching all uniform records from the database
+        2. Displaying them in a sortable, formatted table
+        3. Highlighting status and assignments
+        
+        Table Features:
+        - Complete uniform inventory display
+        - Status indicators
+        - Student assignments
+        - Component tracking (shako, coat, pants, etc.)
+        - Sortable columns
+        - Filterable view
+        
+        Columns Displayed:
+        - Uniform ID
+        - Student Assignment
+        - Component Numbers
+        - Status
+        - Notes
+        
+        Note:
+            This is the main interface for uniform inventory management
+            and provides a comprehensive view of all uniform components
         """
         self.active_table = "uniforms"
         headers = [
@@ -283,6 +568,42 @@ class EquipmentManagementUI(QWidget):
         self.student_table.resizeColumnsToContents()
 
     def open_uniform_inventory(self):
+        """
+        Open a detailed uniform inventory dialog with component-wise views.
+        
+        This method creates a comprehensive inventory management dialog that:
+        1. Shows separate collapsible sections for each uniform component
+        2. Provides detailed tables for shakos, coats, and pants
+        3. Allows selective viewing of component categories
+        4. Supports sorting and filtering within each category
+        
+        Dialog Structure:
+        - Collapsible component groups:
+            * Shakos section
+            * Coats section
+            * Pants section
+        
+        Table Features (per component):
+        - Component ID
+        - Number/identifier
+        - Current status
+        - Student assignment
+        - Notes field
+        - Sortable columns
+        - Resizable layout
+        
+        Component Groups:
+        Each component section:
+        - Can be collapsed/expanded
+        - Has independent sorting
+        - Shows complete inventory
+        - Displays current assignments
+        - Indicates maintenance status
+        
+        Note:
+            This provides a more detailed view than the main uniform table,
+            focusing on individual components rather than complete sets
+        """
         self.active_table = "uniforms"
         dlg = QDialog(self)
         dlg.setWindowTitle("Uniform Inventory")
@@ -373,8 +694,42 @@ class EquipmentManagementUI(QWidget):
         dlg.exec()
 
     def show_uniform_table_screen(self):
+        """
+        Display the full-screen uniform management interface.
+        
+        This method creates a comprehensive uniform management view that:
+        1. Takes up the full application window (except button bar)
+        2. Shows all uniform components in organized tables
+        3. Preserves top-level navigation
+        4. Provides real-time inventory status
+        
+        Screen Organization:
+        - Maintains the top button bar for navigation
+        - Displays all uniform components:
+            * Shakos table
+            * Coats table
+            * Pants table
+            * Garment bags table
+        
+        Table Features:
+        - Sortable columns
+        - Status indicators
+        - Assignment tracking
+        - Notes display
+        - Real-time updates
+        
+        View Characteristics:
+        - Full-screen layout
+        - Preserved navigation
+        - Component-specific tables
+        - Uniform status overview
+        - Quick access to all components
+        
+        Note:
+            This is the main uniform management interface, providing
+            a complete view of the entire uniform inventory system
+        """
         self.active_table = "uniforms"
-        """Display separate uniform component tables full-screen (keeps button bar)."""
         # Remove any existing widgets under the main layout (but keep the button bar layout)
         for i in reversed(range(self.layout.count())):
             item = self.layout.itemAt(i)
@@ -474,6 +829,46 @@ class EquipmentManagementUI(QWidget):
         self.layout.addWidget(bag_group)
 
     def view_all_instruments_table(self):
+        """
+        Display the comprehensive instrument inventory table.
+        
+        This method creates a full-featured instrument management view that:
+        1. Shows all instruments in a sortable table
+        2. Displays detailed instrument information
+        3. Tracks assignments and conditions
+        4. Supports inventory management
+        
+        Table Structure:
+        Columns include:
+        - ID: Unique identifier
+        - Student ID: Current assignee
+        - Name: Instrument type/name
+        - Serial: Serial number
+        - Case: Case identifier
+        - Model: Instrument model
+        - Condition: Current condition
+        - Status: Assignment status
+        - Notes: Additional information
+        
+        Features:
+        - Sortable columns
+        - Dynamic table sizing
+        - Status highlighting
+        - Assignment tracking
+        - Condition monitoring
+        - Search/filter capability
+        
+        View Management:
+        - Clears existing widgets
+        - Maintains navigation bar
+        - Creates or reuses table widget
+        - Auto-sizes columns
+        
+        Note:
+            This is the primary interface for instrument inventory
+            management, providing complete visibility of all instruments
+            and their current status
+        """
         self.active_table = "instruments"
 
         # Remove other widgets
@@ -522,7 +917,45 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
 
     def find_student_popup(self):
-        """Opens a dialog to search for students by ID or section."""
+        """
+        Display a dialog for searching and finding students in the database.
+        
+        This method provides a two-step search interface:
+        1. Choose search method (ID or Section)
+        2. Enter search criteria
+        3. Display results in a formatted table
+        
+        Search Options:
+        - By Student ID:
+            * Requires 9-digit ID
+            * Shows exact match
+            * Displays student details
+        - By Section:
+            * Shows all students in section
+            * Groups by instrument/flag section
+            * Lists in alphabetical order
+        
+        Dialog Features:
+        - Input validation
+        - Error handling
+        - Clear result display
+        - Sortable results
+        - Copy-enabled fields
+        
+        Validation Rules:
+        - Student ID must be 9 digits
+        - Section must match known sections
+        - Non-empty input required
+        
+        Error Handling:
+        - Invalid ID format
+        - No matching records
+        - Empty input prevention
+        
+        Note:
+            This is the primary student search interface,
+            designed for quick student lookup and verification
+        """
         choice, ok = QInputDialog.getItem(
             self, "Find Student", "Search by:", ["Student ID", "Section"], 0, False
         )
@@ -655,12 +1088,70 @@ class EquipmentManagementUI(QWidget):
             dlg.exec()
 
     def open_add_student_popup(self):
+        """
+        Display the Add Student dialog for creating new student records.
+        
+        This method launches a modal dialog that:
+        1. Collects all required student information
+        2. Validates input data
+        3. Creates new database record
+        4. Refreshes relevant table views
+        
+        Dialog Fields:
+        - Student ID (9 digits)
+        - First Name
+        - Last Name
+        - Email
+        - Section/Instrument
+        - Guardian Information
+        - Additional Notes
+        
+        Validation:
+        - Required field checking
+        - ID format validation
+        - Email format checking
+        - Section validation
+        
+        Note:
+            Uses the AddStudentDialog class for consistent
+            data entry and validation across the application
+        """
         dialog = AddStudentDialog()
         if dialog.exec():
             self.refresh_if_active(self.active_table)
 
     def update_student(self):
-        """Launches a dialog to update a student by ID or last name."""
+        """
+        Launch interface for updating existing student records.
+        
+        This method provides a two-path approach to updating students:
+        1. Direct access via student ID
+        2. Search by last name for unknown IDs
+        
+        Process Flow:
+        1. Prompt for student identification
+        2. Validate input or search criteria
+        3. Locate student record(s)
+        4. Display update interface
+        5. Save changes and refresh views
+        
+        Search Methods:
+        - By ID: Direct record access
+            * Requires 9-digit ID
+            * Shows single record
+        - By Last Name: Search-based access
+            * Shows matching students
+            * Allows selection from list
+        
+        Validation Rules:
+        - ID must be 9 digits if provided
+        - Last name search requires minimum length
+        - Prevents duplicate updates
+        
+        Note:
+            This is the primary interface for maintaining
+            accurate student information in the system
+        """
         sid, ok = QInputDialog.getText(
             self, "Update Student",
             "Enter Student ID (9 digits) or leave blank to search by last name:"
@@ -780,6 +1271,29 @@ class EquipmentManagementUI(QWidget):
         dlg.exec()
 
     def _handle_batch_edit(self, list_widget, students, dialog):
+        """
+        Handle editing of students in batch mode from a list view.
+        
+        This internal method manages the workflow of editing a student
+        selected from a list of multiple students. It coordinates the
+        selection, editing dialog, and view updates.
+        
+        Args:
+            list_widget (QListWidget): Widget containing student list
+            students (list): List of student data records
+            dialog (QDialog): Parent dialog containing the list
+        
+        Process Flow:
+        1. Get currently selected student
+        2. Open edit dialog for that student
+        3. Apply changes if confirmed
+        4. Refresh relevant views
+        5. Close parent dialog
+        
+        Note:
+            This is an internal helper method used by various
+            multi-student editing interfaces in the application
+        """
         idx = list_widget.currentRow()
         if idx < 0:
             return
@@ -789,6 +1303,36 @@ class EquipmentManagementUI(QWidget):
         dialog.accept()
 
     def delete_student(self):
+        """
+        Handle the complete process of deleting a student record.
+        
+        This method manages the workflow of student deletion:
+        1. Prompt for student ID
+        2. Validate input
+        3. Confirm student identity
+        4. Execute deletion
+        5. Update views
+        
+        Security Features:
+        - ID validation
+        - Existence verification
+        - Deletion confirmation
+        - User feedback
+        
+        Validation Steps:
+        1. Check ID format (9 digits)
+        2. Verify student exists
+        3. Confirm deletion intention
+        
+        Error Handling:
+        - Invalid ID format
+        - Non-existent student
+        - Cancellation options
+        
+        Note:
+            This is a destructive operation that cannot be undone.
+            Multiple confirmation steps are implemented for safety.
+        """
         sid, ok = QInputDialog.getText(self, "Delete Student", "Enter Student ID (9 digits):")
         if not ok or not sid.strip():
             return
@@ -813,6 +1357,32 @@ class EquipmentManagementUI(QWidget):
             self.refresh_if_active(self.active_table)
 
     def delete_all_students(self):
+        """
+        Execute a complete purge of all student records from the database.
+        
+        This high-risk operation implements multiple safety measures:
+        1. Initial confirmation dialog
+        2. Text verification requirement
+        3. Final confirmation step
+        
+        Security Features:
+        - Double confirmation requirement
+        - Explicit text verification
+        - Clear warning messages
+        - Cancellation options
+        
+        Process Flow:
+        1. Display initial warning dialog
+        2. Request explicit "DELETE ALL" text entry
+        3. Verify text matches exactly
+        4. Execute deletion if confirmed
+        5. Update views and provide feedback
+        
+        Note:
+            This is a critical administrative function that
+            irreversibly removes all student data. Use with
+            extreme caution and only when necessary.
+        """
         ans = QMessageBox.question(
             self, "Delete ALL",
             "This will remove ALL students continue?",
@@ -833,10 +1403,42 @@ class EquipmentManagementUI(QWidget):
 
     def import_students_from_csv(self):
         """
-        Import students from a CSV file. Overwrite existing students with the same ID.
-        Supports two formats:
-        1) Backup-style rows prefixed with 'STUDENTS'
-        2) Plain CSV with headers
+        Import student records from a CSV file with format detection.
+        
+        This method supports two distinct CSV formats:
+        1. Backup Format:
+           - Rows prefixed with 'STUDENTS' marker
+           - Used for system backups/restores
+           - Contains full record information
+        
+        2. Plain CSV Format:
+           - Standard CSV with headers
+           - Used for bulk imports
+           - Flexible column mapping
+        
+        Process Flow:
+        1. Open file selection dialog
+        2. Detect CSV format
+        3. Parse according to format
+        4. Update existing records
+        5. Add new records
+        6. Provide import summary
+        
+        Data Handling:
+        - Overwrites existing records (matched by ID)
+        - Creates new records for new IDs
+        - Validates data format
+        - Maintains data integrity
+        
+        Error Handling:
+        - File format validation
+        - Data validation
+        - Duplicate handling
+        - Import failure recovery
+        
+        Note:
+            This is the primary method for bulk student data
+            import and database population
         """
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Import Students from CSV", "", "CSV Files (*.csv);;All Files (*)"
@@ -926,8 +1528,46 @@ class EquipmentManagementUI(QWidget):
     
     def student_to_code_popup(self):
         """
-        Prompt for Student ID, choose QR Code or Barcode,
-        generate and display with Print, Full Screen, Close.
+        Generate and display QR or barcode for student identification.
+        
+        This method provides a complete workflow for creating
+        machine-readable student identification codes:
+        1. Student ID input and validation
+        2. Code type selection
+        3. Code generation with student info
+        4. Display and output options
+        
+        Code Types Supported:
+        - QR Code:
+            * Higher information density
+            * Includes complete student details
+            * Suitable for digital scanning
+        - Barcode:
+            * Simple linear format
+            * Contains essential ID info
+            * Compatible with basic scanners
+        
+        Generated Code Contents:
+        - Student ID
+        - Full name (Last, First)
+        - Section/Instrument
+        - Additional relevant data
+        
+        Output Options:
+        - Print directly
+        - View full screen
+        - Save to file
+        - Copy to clipboard
+        
+        Validation:
+        - 9-digit ID requirement
+        - Student existence check
+        - Valid code type selection
+        
+        Note:
+            This functionality supports equipment checkout
+            and student identification processes with
+            machine-readable codes
         """
         sid, ok = QInputDialog.getText(self, "Student to Bar/QR code", "Enter Student ID:")
         if not ok or not sid.strip():
@@ -1023,8 +1663,45 @@ class EquipmentManagementUI(QWidget):
 
     def _view_single_student(self, stu, dialog):
         """
-        Display a printable summary of a student's full profile,
-        including uniform and instrument assignments if available.
+        Display a comprehensive, printable view of a student's complete profile.
+        
+        This internal method creates a detailed view that includes:
+        1. Basic student information
+        2. Contact details
+        3. Guardian information
+        4. Section/instrument assignment
+        5. Uniform components assigned
+        6. Instrument details
+        
+        Information Categories:
+        - Personal Info:
+            * Student ID
+            * Name (First, Last)
+            * Status
+            * Section
+        - Contact Info:
+            * Phone
+            * Email
+            * Guardian name
+            * Guardian phone
+        - Equipment:
+            * Uniform components
+            * Instrument details
+            * Cases and accessories
+        
+        Features:
+        - Printable format
+        - Complete data enrichment
+        - Null value handling
+        - Organized layout
+        
+        Args:
+            stu (tuple): Student record tuple
+            dialog (QDialog): Parent dialog to close after viewing
+            
+        Note:
+            This is an internal helper method used by various
+            student information display functions
         """
         headers = [
             "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
@@ -1054,12 +1731,89 @@ class EquipmentManagementUI(QWidget):
         dialog.accept()
 
     def _edit_single_student(self, stu):
-        """Launches the EditStudentDialog for a single student."""
+        """
+        Open the student editing dialog for a specific student.
+        
+        This internal method manages the workflow of editing
+        an individual student's information:
+        1. Launch edit dialog
+        2. Populate with current data
+        3. Handle updates
+        4. Refresh relevant views
+        
+        Edit Capabilities:
+        - Basic Information:
+            * Name
+            * Contact details
+            * Section assignment
+        - Status Updates:
+            * Active/Inactive
+            * Year information
+        - Equipment Assignments:
+            * View current assignments
+            * Track changes
+        
+        Args:
+            stu (tuple): Student record tuple containing current data
+            
+        Features:
+        - Data validation
+        - Change tracking
+        - View updates
+        - Error handling
+        
+        Note:
+            This is an internal helper method used by various
+            student management functions that need edit capability
+        """
         ed = EditStudentDialog(stu)
         ed.exec()
         self.refresh_if_active("students")
 
     def _view_section_students(self, students, section, dialog):
+        """
+        Display a comprehensive view of all students in a specific section.
+        
+        This internal method creates a detailed report of all students
+        in a given section, including their equipment assignments and
+        personal details.
+        
+        Display Categories:
+        1. Personal Information:
+            - Student ID
+            - Names
+            - Contact details
+            - Guardian information
+        2. Equipment Status:
+            - Uniform components
+            - Instrument details
+            - Accessories
+        3. Section-specific Info:
+            - Glove/Spat sizes
+            - Section assignment
+            - Status
+        
+        Data Handling:
+        - Joins student records with equipment data
+        - Handles missing/null values
+        - Formats for printing
+        - Organizes by category
+        
+        Args:
+            students (list): List of student record tuples
+            section (str): Section name for the report
+            dialog (QDialog): Parent dialog to close after viewing
+            
+        Features:
+        - Complete data enrichment
+        - Organized layout
+        - Print-ready format
+        - Null value handling
+        
+        Note:
+            This is an internal helper method used for generating
+            section-specific student reports with equipment details
+        """
         headers = [
             "Student ID", "First Name", "Last Name", "Status", "Phone", "Email",
             "Guardian Name", "Guardian Phone", "Year Came Up", "Section",
@@ -1109,6 +1863,33 @@ class EquipmentManagementUI(QWidget):
         dialog.accept()
 
     def _edit_section_student(self, list_widget, students, dialog):
+        """
+        Edit a student selected from a section-specific list view.
+        
+        This internal method handles editing of a student selected
+        from a section-based list, managing the workflow and UI updates.
+        
+        Args:
+            list_widget (QListWidget): Widget containing student list
+            students (list): List of student data records
+            dialog (QDialog): Parent dialog containing the list
+        
+        Process Flow:
+        1. Get selected student from list
+        2. Open edit dialog with student data
+        3. Apply any changes made
+        4. Refresh affected views
+        5. Close parent dialog
+        
+        Error Handling:
+        - No selection validation
+        - Data consistency checks
+        - View update verification
+        
+        Note:
+            Internal helper method used by section-based
+            student management interfaces
+        """
         idx = list_widget.currentRow()
         if idx < 0:
             return
@@ -1123,8 +1904,36 @@ class EquipmentManagementUI(QWidget):
     
     def find_uniform_popup(self):
         """
-        Open the AddUniformDialog in find mode and return matching component values.
-        Displays results in a table with clear row highlighting and edit functionality.
+        Launch uniform search interface with component-specific results.
+        
+        This method provides a comprehensive uniform search facility:
+        1. Open search dialog with multiple criteria
+        2. Search across all uniform components
+        3. Display matching results by category
+        4. Enable direct editing of found items
+        
+        Search Categories:
+        - Shakos
+        - Coats
+        - Pants
+        - Garment Bags
+        
+        Search Features:
+        - Component-specific search
+        - Multi-component results
+        - Status indication
+        - Assignment tracking
+        
+        Results Display:
+        - Clear component categorization
+        - Status highlighting
+        - Current assignments
+        - Edit capabilities
+        - Row selection
+        
+        Note:
+            This is the primary interface for locating and
+            managing specific uniform components in the system
         """
         dialog = AddUniformDialog(self, find_mode=True)
         if not dialog.exec():
@@ -1316,9 +2125,42 @@ class EquipmentManagementUI(QWidget):
 
     def add_uniform_popup(self):
         """
-        Open dialog to add a new uniform part(s) without assigning to a student.
-        Adds to separate tables based on which fields are filled.
-        Prevents duplicate entries based on unique identifiers.
+        Open dialog to add one or more new uniform components to inventory.
+        
+        This method provides a comprehensive interface for adding new uniform pieces:
+        1. Present component entry dialog
+        2. Process each filled component field
+        3. Check for duplicates in existing inventory
+        4. Add valid new components to database
+        5. Report success/failure for each component
+        
+        Components Handled:
+        - Shakos (with unique number)
+        - Coats (with number and optional hanger)
+        - Pants (with unique number)
+        - Garment Bags (with unique identifier)
+        
+        Data Validation:
+        - Prevents duplicate entries
+        - Validates component numbers
+        - Tracks successful additions
+        - Reports duplicate skips
+        
+        Database Operations:
+        - Atomic transaction for all components
+        - Individual component table updates
+        - Status tracking for new items
+        - Notes storage for components
+        
+        User Feedback:
+        - Success messages per component
+        - Duplicate warnings
+        - Empty submission handling
+        - UI table refresh on changes
+        
+        Note:
+            This method supports bulk addition of multiple component types
+            in a single operation while maintaining data integrity
         """
         dialog = AddUniformDialog(self)
         if not dialog.exec():
@@ -1392,6 +2234,47 @@ class EquipmentManagementUI(QWidget):
             QMessageBox.warning(self, "No Data", "No uniform parts were added. Please fill at least one field.")
 
     def assign_uniform_popup(self):
+        """
+        Launch interface for assigning uniform components to a student.
+        
+        This method provides a comprehensive uniform assignment workflow:
+        1. Collect student ID and component information
+        2. Validate student existence and current assignments
+        3. Check component availability and inventory status
+        4. Process multi-component assignment transaction
+        5. Update component and student records
+        
+        Component Assignment:
+        - Shakos (numbered)
+        - Coats (with hanger tracking)
+        - Pants (numbered)
+        - Garment Bags (identified)
+        - Gloves (sized: XS-XL)
+        - Spats (sized: XS-XL)
+        
+        Validation Steps:
+        - Student ID verification
+        - Existing assignment checks
+        - Inventory availability
+        - Component existence
+        - Size availability
+        
+        Database Updates:
+        - Component status changes
+        - Student assignments
+        - Size preferences
+        - Hanger tracking
+        
+        Error Handling:
+        - Invalid student IDs
+        - Already assigned components
+        - Missing inventory
+        - Unavailable components
+        
+        Note:
+            This method ensures atomic updates across multiple
+            database tables while maintaining data consistency
+        """
         dlg = QDialog(self)
         dlg.setWindowTitle("Assign Uniform")
         v = QVBoxLayout()
@@ -1556,6 +2439,44 @@ class EquipmentManagementUI(QWidget):
         dlg.exec()
 
     def return_uniform_popup(self):
+        """
+        Process the return of a student's assigned uniform components.
+        
+        This method handles the uniform return workflow:
+        1. Collect student ID
+        2. Validate student existence
+        3. Process component returns
+        4. Update inventory status
+        
+        Return Process:
+        - Accepts 9-digit student ID
+        - Validates student record
+        - Returns all assigned components:
+          * Shakos
+          * Coats
+          * Pants
+          * Garment Bags
+        
+        Database Updates:
+        - Clears student assignments
+        - Updates component availability
+        - Resets component status
+        - Maintains assignment history
+        
+        Validation:
+        - Student ID format check
+        - Student existence verification
+        - Current assignment verification
+        
+        Interface:
+        - Simple ID entry dialog
+        - Success/failure notifications
+        - Automatic table refresh
+        
+        Note:
+            This method processes all uniform components at once,
+            ensuring complete return tracking and inventory updates
+        """
         sid, ok = QInputDialog.getText(self, "Return Uniform", "Enter Student ID:")
         if not ok or not sid.strip():
             return
@@ -1574,6 +2495,45 @@ class EquipmentManagementUI(QWidget):
         self.refresh_if_active(self.active_table)
 
     def show_outstanding_uniforms(self):
+        """
+        Display a report of all uniforms currently assigned to students.
+        
+        This method provides a section-filtered uniform assignment report:
+        1. Allow section-based filtering
+        2. Query assigned uniform components
+        3. Generate detailed assignment report
+        4. Display formatted results
+        
+        Report Features:
+        - Optional section filtering
+        - All sections overview
+        - Complete component listing:
+          * Shakos
+          * Coats with hangers
+          * Pants
+          * Garment Bags
+        
+        Display Format:
+        - Student identification
+        - Component details
+        - Section grouping
+        - Printable output
+        
+        Filter Options:
+        - All sections view
+        - Individual section filter
+        - Empty results handling
+        
+        Data Presentation:
+        - Student name and ID
+        - Component numbers
+        - Hanger assignments
+        - Section context
+        
+        Note:
+            This report helps track uniform distribution and
+            identify components that need to be returned
+        """
         opts = ["<All>"] + self.sections
         section, ok = QInputDialog.getItem(
             self, "Outstanding Uniforms",
@@ -1593,6 +2553,40 @@ class EquipmentManagementUI(QWidget):
         self.show_printable_results("Outstanding Uniforms", msg)
 
     def delete_all_uniforms(self):
+        """
+        Remove all uniform components from the inventory system.
+        
+        This method provides a safeguarded complete uniform purge:
+        1. Present confirmation dialog
+        2. Process complete deletion
+        3. Clear all uniform tables
+        4. Update interface display
+        
+        Components Affected:
+        - All Shakos
+        - All Coats
+        - All Pants
+        - All Garment Bags
+        
+        Safety Features:
+        - Confirmation dialog
+        - Explicit warning
+        - Irreversibility notice
+        
+        Database Operations:
+        - Complete table clears
+        - Atomic transaction
+        - All component types
+        
+        Interface Updates:
+        - Active table refresh
+        - Status reflection
+        - Visual confirmation
+        
+        Note:
+            This is a destructive operation that cannot be undone.
+            Use with extreme caution.
+        """
         from PyQt6.QtWidgets import QMessageBox
         reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete ALL uniforms? This cannot be undone.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
@@ -1607,8 +2601,48 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
     def find_instrument_popup(self):
         """
-        Opens a dialog to search for instruments by serial number and/or name.
-        Displays matching results in a table with clear row highlighting and edit functionality.
+        Search and manage instruments through an interactive interface.
+        
+        This method provides comprehensive instrument search functionality:
+        1. Open search dialog with multiple criteria
+        2. Process serial and name-based searches
+        3. Display matching results in detailed table
+        4. Enable direct instrument editing
+        
+        Search Features:
+        - Serial number matching
+        - Instrument name search
+        - Combined criteria search
+        - Partial name matching
+        
+        Results Display:
+        - Multi-column table view:
+          * ID and Student
+          * Name and Serial
+          * Case and Model
+          * Condition and Status
+          * Notes field
+        
+        Edit Capabilities:
+        - Row selection highlighting
+        - Comprehensive editing:
+          * Instrument type
+          * Serial number
+          * Case details
+          * Model information
+          * Condition status
+          * Availability status
+          * Notes management
+        
+        Database Integration:
+        - Real-time updates
+        - Status tracking
+        - Assignment management
+        - History maintenance
+        
+        Note:
+            This is the primary interface for locating and
+            managing instruments in the inventory system
         """
         dlg = AddInstrumentDialog(self, find_mode=True, instruments=self.sections)
         if not dlg.exec():
@@ -1818,11 +2852,53 @@ class EquipmentManagementUI(QWidget):
 
     def assign_instrument_popup(self):
         """
-        Popup workflow to assign an instrument to a student.
-        1. Prompt for Student ID.
-        2. Prompt for instrument type and serial number.
-        3. Look up matching instruments.
-        4. If available, assign it to the student.
+        Guide user through instrument assignment workflow.
+        
+        This method implements a multi-step instrument assignment process:
+        1. Student identification and validation
+        2. Instrument selection and verification
+        3. Case assignment and status update
+        4. Database record updates
+        
+        Workflow Steps:
+        - Student ID Collection:
+          * 9-digit validation
+          * Student record verification
+          * Existence check
+        
+        - Instrument Selection:
+          * Type selection from sections
+          * Serial number entry
+          * Availability verification
+          * Multiple match handling
+        
+        - Assignment Processing:
+          * Case number collection
+          * Status update to 'Assigned'
+          * Student ID association
+          * Case tracking update
+        
+        Error Handling:
+        - Invalid student IDs
+        - Missing instruments
+        - Unavailable instruments
+        - Multiple match resolution
+        
+        Features:
+        - New instrument creation option
+        - Multiple match selection interface
+        - Case tracking integration
+        - Status management
+        
+        Database Updates:
+        - Instrument assignment
+        - Status changes
+        - Case associations
+        - Student records
+        
+        Note:
+            This method ensures proper instrument tracking and
+            maintains accurate assignment records
         """
         # Step 1: Get Student ID
         sid, ok = QInputDialog.getText(self, "Assign Instrument", "Enter Student ID:")
@@ -1973,6 +3049,41 @@ class EquipmentManagementUI(QWidget):
         type_dialog.exec()
 
     def return_instrument_popup(self):
+        """
+        Process the return of instruments assigned to a student.
+        
+        This method handles the instrument return workflow:
+        1. Collect and validate student ID
+        2. Process instrument returns
+        3. Update assignment records
+        
+        Process Features:
+        - Student ID validation
+        - Assignment verification
+        - Status updates
+        - Database synchronization
+        
+        Validation Steps:
+        - 9-digit ID check
+        - Student record lookup
+        - Assignment confirmation
+        
+        Database Updates:
+        - Clear student assignment
+        - Update instrument status
+        - Reset availability
+        - Maintain history
+        
+        Interface:
+        - Simple ID entry
+        - Validation feedback
+        - Success confirmation
+        - Table refresh
+        
+        Note:
+            This method handles bulk return of all instruments
+            assigned to the specified student
+        """
         sid, ok = QInputDialog.getText(self, "Return Instrument", "Enter Student ID:")
         if not ok or not sid.strip():
             return
@@ -2020,7 +3131,7 @@ class EquipmentManagementUI(QWidget):
 
         # Format results into a printable string
         msg = "\n".join(
-            f"{r[0]} {r[1]}: {r[2]} | Serial: {r[4]} | Case: {r[5]}"
+            f"{r[0]} {r[1]}: {r[3]} | Serial: {r[4]} | Case: {r[5]}"  # name, instrument, serial, case
             for r in rows
         )
 
@@ -2029,6 +3140,34 @@ class EquipmentManagementUI(QWidget):
         self.show_printable_results("Outstanding Instruments", msg)
 
     def delete_all_instruments(self):
+        """
+        Remove all instruments from the inventory system.
+        
+        This method provides a safeguarded complete instrument purge:
+        1. Present confirmation dialog
+        2. Process complete deletion
+        3. Clear instrument records
+        4. Update interface
+        
+        Safety Features:
+        - Explicit confirmation
+        - Warning message
+        - Irreversibility notice
+        
+        Database Operations:
+        - Complete table clear
+        - Atomic transaction
+        - History removal
+        
+        Interface Updates:
+        - Table refresh
+        - Visual confirmation
+        - State synchronization
+        
+        Note:
+            This is a destructive operation that cannot be undone.
+            Use with extreme caution.
+        """
         from PyQt6.QtWidgets import QMessageBox
         reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete ALL instruments? This cannot be undone.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
@@ -2040,7 +3179,47 @@ class EquipmentManagementUI(QWidget):
     # --------------------------------------------------------------------------
 
     def create_backup(self):
-        """Create a CSV backup of all tables in a consistent format."""
+        """
+        Create a comprehensive CSV backup of the entire database.
+        
+        This method provides complete data preservation:
+        1. Present save location dialog
+        2. Extract all table data
+        3. Format data consistently
+        4. Write to CSV file
+        
+        Tables Backed Up:
+        - Students (personal and contact info)
+        - Uniforms (assignments and components)
+        - Shakos (inventory and status)
+        - Coats (with hanger tracking)
+        - Pants (inventory records)
+        - Garment Bags (assignments)
+        - Instruments (complete records)
+        
+        Data Format:
+        - CSV file structure
+        - Table identification
+        - Complete row data
+        - UTF-8 encoding
+        
+        Record Types:
+        - Student information
+        - Equipment inventory
+        - Assignment records
+        - Status tracking
+        - Notes and details
+        
+        Error Handling:
+        - File access validation
+        - Write operation safety
+        - User feedback
+        - Exception capture
+        
+        Note:
+            Creates a complete snapshot of the database
+            state suitable for disaster recovery
+        """
 
         # Ask user where to save
         file_path, _ = QFileDialog.getSaveFileName(
@@ -2114,10 +3293,59 @@ class EquipmentManagementUI(QWidget):
 
     def use_backup(self):
         """
-        Restore the database from a CSV backup snapshot.
-
-        Format: section,field1,field2,...
-        Sections: STUDENTS, SHAKOS, COATS, PANTS, BAGS, UNIFORMS, INSTRUMENTS
+        Restore complete database from a CSV backup file.
+        
+        This method provides comprehensive data restoration:
+        1. Select backup file
+        2. Clear existing data
+        3. Process backup contents
+        4. Restore all records
+        
+        Restoration Process:
+        - Complete table clearing
+        - Systematic data import
+        - Progress tracking
+        - Validation checks
+        
+        Data Categories:
+        - Student Records:
+          * Personal information
+          * Contact details
+          * Section assignments
+          * Equipment sizes
+        
+        - Equipment Records:
+          * Shakos inventory
+          * Coats and hangers
+          * Pants tracking
+          * Garment bags
+          * Instruments
+        
+        - Assignment Records:
+          * Current assignments
+          * Status information
+          * Notes and details
+        
+        Safety Features:
+        - Atomic transactions
+        - Error tracking
+        - Record counting
+        - Success verification
+        
+        Format Requirements:
+        CSV structure: section,field1,field2,...
+        Valid sections:
+        - STUDENTS
+        - SHAKOS
+        - COATS
+        - PANTS
+        - BAGS
+        - UNIFORMS
+        - INSTRUMENTS
+        
+        Note:
+            This operation completely replaces all existing data.
+            Use with caution and verify backup file validity.
         """
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Use Backup", "", "CSV Files (*.csv);;All Files (*)"

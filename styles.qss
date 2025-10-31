@@ -1,95 +1,178 @@
-/* Applies to all QWidget-based elements (windows, dialogs, labels, etc.) */
+/*
+Equipment Management System - Stylesheet
+
+This QSS file implements a professional dark theme optimized for:
+1. Extended viewing sessions
+2. Data-heavy interfaces
+3. Clear visual hierarchy
+4. Consistent user experience
+
+Color Palette:
+- Primary Background: #2b2b2b (Dark gray)
+- Secondary Background: #1e1e1e (Darker gray)
+- Accent Color: #3a6ea5 (Medium blue)
+- Accent Hover: #2a5e94 (Dark blue)
+- Warning Color: #b22222 (Deep red)
+- Border Color: #444444 (Medium gray)
+- Text Color: #ffffff (White)
+
+Design Principles:
+- High contrast for readability
+- Consistent spacing and padding
+- Clear visual feedback
+- Hierarchical information display
+- Minimal visual noise
+*/
+
+/* Base Widget Styling
+   Applied to all QWidget-derived components for consistent theme foundation.
+   Establishes the core visual identity of the application. */
 QWidget {
-    background-color: #2b2b2b;       /* Dark gray background for overall theme */
-    color: white;                    /* White text for contrast */
-    font-size: 14px;                 /* Base font size for readability */
-    font-family: 'Arial', sans-serif; /* Clean, legible font */
+    background-color: #2b2b2b;       /* Base theme color for visual comfort */
+    color: white;                    /* Maximum contrast for text readability */
+    font-size: 14px;                 /* Balanced size for various screen resolutions */
+    font-family: 'Arial', sans-serif; /* Modern, highly legible typeface */
 }
 
-/* Styles the main table widget used for displaying student data */
+/* Table Widget Styling
+   Optimized for data-dense displays with clear row/column separation.
+   Uses subtle color variations to create visual depth without distraction. */
 QTableWidget {
-    background-color: #1e1e1e;       /* Slightly darker than QWidget for visual depth */
-    border: 1px solid #444;          /* Subtle border to define table edges */
-    gridline-color: #444;            /* Matches border for consistent grid lines */
+    background-color: #1e1e1e;       /* Darker background for content focus */
+    border: 1px solid #444;          /* Defined boundaries for data containment */
+    gridline-color: #444;            /* Consistent grid lines for data separation */
 }
 
 
-/* Styles the top-left corner button of a QTableWidget (usually blank) */
+/* Table Corner Button Styling
+   Refines the often-overlooked corner button to maintain visual consistency.
+   Removes unnecessary visual elements while preserving table structure. */
 QTableCornerButton::section {
-    background-color: #313131;       /* Matches table background for seamless look */
-    border: none;                    /* Removes default border for cleaner appearance */
+    background-color: #313131;       /* Subtle variation for depth perception */
+    border: none;                    /* Clean aesthetic without visual clutter */
 }
 
-
-/* Base style for all QPushButton widgets */
+/* Button Base Styling
+   Implements a modern, flat design language for interactive elements.
+   Prioritizes clear affordances and user feedback through state changes.
+   
+   Design Considerations:
+   1. Comfortable touch targets (44px equivalent)
+   2. Clear visual feedback
+   3. Consistent spacing
+   4. Accessible contrast ratios
+*/
 QPushButton {
-    background-color: #3a6ea5;       /* Medium blue for primary actions */
-    color: white;                    /* White text for contrast */
-    border: none;                    /* Flat button style */
-    border-radius: 6px;              /* Rounded corners for modern look */
-    padding: 10px;                   /* Comfortable click area */
-    font-size: 16px;                 /* Slightly larger font for emphasis */
+    background-color: #3a6ea5;       /* Primary action color - draws attention */
+    color: white;                    /* Maximum contrast for readability */
+    border: none;                    /* Modern, flat design aesthetic */
+    border-radius: 6px;              /* Soft corners for visual comfort */
+    padding: 10px;                   /* Generous touch target */
+    font-size: 16px;                 /* Emphasized text for clear hierarchy */
 }
 
-/* Hover effect for QPushButton */
+/* Button Hover State
+   Provides immediate visual feedback for user interaction.
+   Creates a clear distinction between static and interactive states. */
 QPushButton:hover {
-    background-color: #2a5e94;       /* Darker blue on hover for feedback */
+    background-color: #2a5e94;       /* Darkened tone signals interactivity */
 }
 
-/* Special styling for a QPushButton with objectName "deleteAllButton" */
+/* Destructive Action Button Styling
+   Special treatment for high-risk operations requiring user attention.
+   Uses color psychology and enhanced visual weight to signal caution.
+   
+   UX Considerations:
+   1. Clear visual distinction from standard actions
+   2. Universal color association with danger
+   3. Enhanced visibility without being overwhelming
+   4. Consistent with system-wide warning patterns
+*/
 QPushButton#deleteAllButton {
-    background-color: #b22222;       /* Deep red to signal destructive action */
-    color: white;
-    font-weight: bold;               /* Emphasize seriousness of the action */
+    background-color: #b22222;       /* Warning red - signals destructive intent */
+    color: white;                    /* High contrast for maximum visibility */
+    font-weight: bold;               /* Additional emphasis through typography */
 }
 
-/* Hover effect for delete button */
+/* Destructive Button Hover State
+   Intensifies the warning signal on interaction.
+   Maintains user awareness of action severity. */
 QPushButton#deleteAllButton:hover {
-    background-color: #d32f2f;       /* Brighter red on hover for urgency */
+    background-color: #d32f2f;       /* Brightened tone increases urgency */
 }
 
-
-/* Styles for QToolButton (used for toolbar or icon-based buttons) */
+/* Tool Button Styling
+   Specialized buttons for toolbar and icon-based interactions.
+   Maintains visual consistency with standard buttons while
+   accommodating unique toolbar requirements.
+   
+   Design Goals:
+   1. Visual harmony with standard buttons
+   2. Optimal icon presentation
+   3. Clear interactive states
+   4. Compact yet accessible layout
+*/
 QToolButton {
-    background-color: #3a6ea5;       /* Matches QPushButton for consistency */
-    color: white;
-    border-radius: 6px;
-    padding: 10px;
-    font-weight: bold;
-    font-size: 14px;
-    qproperty-iconAlignment: AlignCenter; /* Centers icon within button */
+    background-color: #3a6ea5;       /* Consistent with primary action color */
+    color: white;                    /* Standard contrast for readability */
+    border-radius: 6px;              /* Matches button rounding */
+    padding: 10px;                   /* Adequate touch target */
+    font-weight: bold;               /* Enhanced visibility for toolbar items */
+    font-size: 14px;                 /* Balanced with icon size */
+    qproperty-iconAlignment: AlignCenter; /* Optimal icon positioning */
 }
 
-/* Removes the default dropdown arrow from tool buttons */
+/* Tool Button Menu Indicator
+   Removes default Qt dropdown indicators for cleaner appearance.
+   Assumes icon-based or explicit labeling for dropdown functionality. */
 QToolButton::menu-indicator {
-    image: none;
+    image: none;                     /* Eliminates redundant visual element */
 }
 
-/* Hover effect for tool buttons */
+/* Tool Button Hover State
+   Maintains consistency with standard button interaction patterns. */
 QToolButton::hover {
-    background-color: #2a5e94;
+    background-color: #2a5e94;       /* Matches standard button hover state */
 }
 
-
-/* Styles the horizontal scrollbar handle */
+/* Scrollbar Styling
+   Implements modern, minimal scrollbar design that maintains
+   usability while reducing visual noise.
+   
+   Design Priorities:
+   1. Clear scrolling affordance
+   2. Minimal visual interruption
+   3. Adequate interaction targets
+   4. Smooth visual integration
+*/
 QScrollBar::handle:horizontal {
-    background: #808080;             /* Light gray for visibility */
-    min-width: 20px;                 /* Ensures handle is usable */
-    border-radius: 5px;              /* Rounded for modern look */
+    background: #808080;             /* Neutral gray for subtle presence */
+    min-width: 20px;                 /* Minimum graspable size */
+    border-radius: 5px;              /* Consistent with overall roundness */
 }
 
-/* Styles the non-scrollable areas of the scrollbar */
+/* Scrollbar Background Areas
+   Unifies non-interactive scrollbar regions with main interface.
+   Reduces visual fragmentation while maintaining functionality. */
 QScrollBar::add-page:horizontal,
 QScrollBar::sub-page:horizontal {
-    background: #2b2b2b;             /* Matches overall background */
+    background: #2b2b2b;             /* Seamless integration with background */
 }
 
-/* Styles the header sections of tables (column labels) */
+/* Table Header Styling
+   Emphasizes column headers for improved data scanning and organization.
+   
+   Design Goals:
+   1. Clear visual hierarchy
+   2. Easy text scanability
+   3. Distinct from data cells
+   4. Professional appearance
+*/
 QHeaderView::section {
-    background-color: #3a6ea5;       /* Blue header for visual hierarchy */
-    color: white;
-    padding: 6px;                    /* Prevents text cutoff and improves spacing */
-    font-size: 12px;
-    font-weight: bold;
+    background-color: #3a6ea5;       /* Distinct yet coordinated with theme */
+    color: white;                    /* Maximum contrast for labels */
+    padding: 6px;                    /* Comfortable text spacing */
+    font-size: 12px;                 /* Optimal size for header text */
+    font-weight: bold;               /* Enhanced visual prominence */
 }
 

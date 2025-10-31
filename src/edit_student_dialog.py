@@ -1,25 +1,109 @@
-# Import necessary PyQt6 widgets and layout classes
+# Standard library imports
+
+# Third-party imports
 from PyQt6.QtWidgets import (
     QDialog, QLabel, QLineEdit, QComboBox, QPushButton, QFormLayout, QMessageBox
 )
 
-# Import your database module to perform updates
+# Local application imports
 import db
 
 class EditStudentDialog(QDialog):
     """
-    This dialog allows the user to edit an existing student's core details.
-    It pre-fills the form with current data and updates the database on save.
+    Dialog for modifying existing student records with data validation.
+    
+    This dialog implements a comprehensive student editing interface:
+    1. Pre-populated form display
+    2. Field-by-field modifications
+    3. Data validation
+    4. Database updates
+    
+    Form Categories:
+    - Personal Information:
+      * First Name
+      * Last Name
+      * Status (Student/Former/Alumni)
+      * Year Joined
+      
+    - Contact Details:
+      * Phone Number (optional)
+      * Email Address
+      * Section Assignment
+      
+    - Guardian Information:
+      * Guardian Name
+      * Guardian Phone (optional)
+    
+    Validation Features:
+    - Phone number format checking
+    - Required field verification
+    - Data type validation
+    - Status constraints
+    
+    Database Integration:
+    - Individual field updates
+    - Transaction management
+    - Error handling
+    - Success confirmation
+    
+    Interface Elements:
+    - Pre-filled form fields
+    - Field-specific inputs
+    - Clear labeling
+    - Status messages
+    
+    Note:
+        This dialog ensures data integrity through field-level
+        validation and individual database updates for each
+        modified field
     """
 
     def __init__(self, student_data):
+        """
+        Initialize the student editing dialog with existing data.
+        
+        This constructor configures the dialog and pre-populates fields:
+        1. Basic dialog setup
+        2. Student data storage
+        3. Form layout creation
+        4. Field population
+        
+        Args:
+            student_data (tuple): Student record from database containing:
+                0: Student ID (9 digits)
+                1: First Name
+                2: Last Name
+                3: Phone (10 digits, optional)
+                4: Email
+                5: Year Joined
+                6: Status
+                7: Guardian Name
+                8: Guardian Phone (10 digits, optional)
+                9: Section
+        
+        Dialog Setup:
+        - Window configuration
+        - Data preservation
+        - Layout initialization
+        - Widget creation
+        
+        Data Handling:
+        - Student ID storage
+        - Field mapping
+        - Null value handling
+        - Type conversion
+        
+        Note:
+            The student_data tuple structure must match the
+            database schema exactly for proper field mapping
+        """
         super().__init__()
 
-        # Set the window title
+        # Configure window presentation
         self.setWindowTitle("Edit Student Details")
 
-        # Store the student ID for reference during updates
-        # student_data is a tuple matching the students table columns:
+        # Preserve student identifier for database operations
+        # student_data follows database schema structure:
         # 0: ID, 1: First Name, 2: Last Name, 3: Phone, 4: Email,
         # 5: Year Joined, 6: Status, 7: Guardian Name, 8: Guardian Phone, 9: Section
         self.student_id = student_data[0]
@@ -76,8 +160,50 @@ class EditStudentDialog(QDialog):
 
     def update_student(self):
         """
-        Validate inputs and update the student record in the database.
-        Each field is updated individually using db.update_student().
+        Process form data and update student record in database.
+        
+        This method implements a complete update workflow:
+        1. Input validation
+        2. Data normalization
+        3. Field mapping
+        4. Database updates
+        
+        Validation Steps:
+        - Student ID:
+          * Verify 9-digit format
+          * Check numeric content
+          
+        - Phone Numbers:
+          * Optional field handling
+          * 10-digit format check
+          * Numeric content validation
+          
+        - Guardian Phone:
+          * Optional field handling
+          * 10-digit format check
+          * Numeric content validation
+        
+        Database Operations:
+        - Field-by-field updates
+        - Column name mapping
+        - Null handling
+        - Transaction management
+        
+        Field Processing:
+        - Widget type detection
+        - Value extraction
+        - String normalization
+        - Empty field handling
+        
+        User Feedback:
+        - Validation errors
+        - Update confirmation
+        - Success message
+        - Dialog closure
+        
+        Note:
+            This method uses individual field updates to ensure
+            granular error handling and transaction safety
         """
 
         # --- Validate Student ID format ---

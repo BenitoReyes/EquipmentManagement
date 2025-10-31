@@ -1,29 +1,107 @@
-# Import necessary PyQt6 widgets for building the form
+# Standard library imports
+
+# Third-party imports
 from PyQt6.QtWidgets import (
     QDialog, QLabel, QLineEdit, QComboBox,
     QPushButton, QFormLayout, QMessageBox
 )
 
-# Import your database module to insert the student record
+# Local application imports
 import db
 
 class AddStudentDialog(QDialog):
     """
-    This dialog allows the user to add a new student to the system.
-    It collects personal info, contact details, and section assignment.
-    On submission, it validates the inputs and calls db.add_student().
+    Dialog for adding new students with comprehensive information collection.
+    
+    This dialog implements a form-based interface for:
+    1. Personal information collection
+    2. Contact details management
+    3. Section assignment
+    4. Status tracking
+    
+    Form Categories:
+    - Student Identification:
+      * Student ID (9 digits)
+      * First and Last Name
+      * Year Joined
+      
+    - Contact Information:
+      * Phone Number (10 digits)
+      * Email Address
+      * Status Selection
+      
+    - Guardian Details:
+      * Guardian Name
+      * Guardian Phone (10 digits)
+      
+    - Program Assignment:
+      * Section Selection (Instrument/Unit)
+      * Status Tracking
+    
+    Validation Features:
+    - Required field checking
+    - ID format validation
+    - Phone number formatting
+    - Data type verification
+    
+    Database Integration:
+    - Direct db.add_student() connection
+    - Error handling
+    - Success confirmation
+    - Duplicate prevention
+    
+    Interface Elements:
+    - Form layout structure
+    - Clear field labeling
+    - Input validation
+    - Status messages
+    
+    Note:
+        This dialog enforces data integrity through
+        comprehensive validation before database insertion
     """
 
     def __init__(self):
+        """
+        Initialize and configure the student addition dialog.
+        
+        This constructor sets up:
+        1. Basic dialog configuration
+        2. Form layout structure
+        3. Input field creation
+        4. Widget organization
+        
+        Dialog Setup:
+        - Window title configuration
+        - Form layout initialization
+        - Widget storage system
+        - Field organization
+        
+        Input Fields Created:
+        - Text entry fields
+        - Dropdown selectors
+        - Status indicators
+        - Section choosers
+        
+        Layout Management:
+        - Vertical form structure
+        - Label alignment
+        - Widget spacing
+        - Visual hierarchy
+        
+        Note:
+            All widgets are stored in self.inputs dictionary
+            for easy access during validation and submission
+        """
         super().__init__()
 
-        # Set the window title
+        # Configure window title
         self.setWindowTitle("Add New Student")
 
-        # Create a form layout to organize input fields vertically
+        # Initialize form layout for organized field presentation
         layout = QFormLayout()
 
-        # Dictionary to store all input widgets by label
+        # Central widget storage for validation and data collection
         self.inputs = {}
 
         # --- Create input fields for student information ---
@@ -65,8 +143,51 @@ class AddStudentDialog(QDialog):
 
     def add_student(self):
         """
-        Validate all inputs and insert the student into the database.
-        If any required field is invalid, show a warning.
+        Process form data and add new student to database.
+        
+        This method implements a complete data processing workflow:
+        1. Data collection and cleaning
+        2. Field validation
+        3. Database insertion
+        4. Result handling
+        
+        Validation Steps:
+        - Student ID:
+          * Must be exactly 9 digits
+          * All characters must be numeric
+        
+        - Name Fields:
+          * First name required
+          * Last name required
+          * Non-empty after trimming
+        
+        - Phone Numbers:
+          * Optional fields
+          * When provided: 10 digits
+          * All characters numeric
+        
+        - Other Fields:
+          * Email optional
+          * Year optional
+          * Section required
+          * Status required
+        
+        Database Operation:
+        - Null handling for optional fields
+        - Exception management
+        - Success confirmation
+        - Error reporting
+        
+        User Feedback:
+        - Validation error messages
+        - Success confirmations
+        - Database error reporting
+        - Dialog closure on success
+        
+        Note:
+            This method ensures data integrity through
+            comprehensive validation before attempting
+            database operations
         """
 
         # --- Retrieve and clean input values ---
