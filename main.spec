@@ -35,6 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['EQUIP_LOGO_standard.ico'],
-    version='version.py',
+    icon=['EQUIP_LOGO.ico'],
 )
