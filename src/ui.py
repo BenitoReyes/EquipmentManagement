@@ -58,6 +58,11 @@ def resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
+    # To display in a QLabel
+    logo_pixmap = QPixmap(resource_path("EQUIP_LOGO.png"))
+    logo_label = QLabel()
+    logo_label.setPixmap(logo_pixmap)
+
 def load_stylesheet():
     """
     Load and return the application's QSS stylesheet content.
@@ -163,7 +168,8 @@ class EquipmentManagementUI(QWidget):
         self.setWindowTitle("Equipment Management")
         self.setGeometry(200, 200, 1200, 700)
         self.setStyleSheet(load_stylesheet())
-
+        # To set as window icon
+        self.setWindowIcon(QIcon(resource_path("EQUIP_LOGO_256.png")))
         # Valid sections including Flags
         self.sections = [
             "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
