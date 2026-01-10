@@ -134,9 +134,24 @@ def create_student_table():
                 'Trumpet','Trombone','Euphonium','French Horn','Tuba',
                 'Flute','Clarinet','Saxophone','Bassoon','Oboe','Percussion',
                 'Flags'
-            ))
+            )),
+            glove_size TEXT,
+            spat_size TEXT
         )
     ''')
+    conn.commit()
+    conn.close()
+    
+    # Add missing columns if they don't exist
+    conn, cursor = connect_db()
+    try:
+        cursor.execute("ALTER TABLE students ADD COLUMN glove_size TEXT")
+    except:
+        pass
+    try:
+        cursor.execute("ALTER TABLE students ADD COLUMN spat_size TEXT")
+    except:
+        pass
     conn.commit()
     conn.close()
 
@@ -430,7 +445,7 @@ def get_student_by_id(student_id):
         
     Returns:
         tuple: Student record containing:
-        - Basic Info: ID, name, status, section
+        - Basic Info: ID, name, status, section, glove_size, spat_size
         - Contact: phone, email, guardian info
         - Uniform: shako, coat, pants, garment bag numbers
         - Instrument: name, serial number, case ID
@@ -444,7 +459,7 @@ def get_student_by_id(student_id):
     cursor.execute("""
         SELECT s.student_id, s.first_name, s.last_name, s.status,
                s.phone, s.email, s.guardian_name, s.guardian_phone,
-               s.year_came_up, s.section,
+               s.year_came_up, s.section, s.glove_size, s.spat_size,
                u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num,
                i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
@@ -880,7 +895,7 @@ def update_student(student_id, field, new_value):
     valid_fields = {
         "first_name", "last_name", "phone", "email",
         "year_came_up", "status", "guardian_name",
-        "guardian_phone", "section"
+        "guardian_phone", "section", "glove_size", "spat_size"
     }
     status_options = {"Student", "Former", "Alumni"}
     section_options = {
@@ -902,6 +917,13 @@ def update_student(student_id, field, new_value):
     # Validate section
     if field == "section" and new_value not in section_options:
         print(f"Error: Section must be one of {section_options}")
+        conn.close()
+        return
+
+    # Validate glove_size and spat_size
+    size_options = {"", "XS", "S", "M", "L", "XL"}
+    if field in {"glove_size", "spat_size"} and new_value is not None and new_value not in size_options:
+        print(f"Error: {field} must be one of {size_options} or None")
         conn.close()
         return
 
@@ -1160,7 +1182,7 @@ def get_students_with_outstanding_uniforms():
     """
     conn, cursor = connect_db()
     cursor.execute('''
-        SELECT s.first_name, s.last_name,
+        SELECT s.student_id, s.first_name, s.last_name,
                u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num
         FROM students s
         JOIN uniforms u ON s.student_id = u.student_id
@@ -1206,7 +1228,7 @@ def get_students_with_outstanding_uniforms_by_section(section):
     """
     conn, cursor = connect_db()
     cursor.execute('''
-        SELECT s.first_name, s.last_name,
+        SELECT s.student_id, s.first_name, s.last_name,
                u.shako_num, u.hanger_num, u.garment_bag, u.coat_num, u.pants_num
         FROM students s
         JOIN uniforms u ON s.student_id = u.student_id
@@ -1243,6 +1265,47 @@ def get_uniform_id_by_student(student_id):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
+def get_uniforms_by_student_id(student_id):
+    """
+    Retrieve the uniform components currently assigned to a student.
+    
+    Returns a dictionary containing all uniform pieces assigned to the
+    specified student. Used to check existing assignments before
+    assigning new components.
+    
+    Args:
+        student_id (str): Student's unique identifier
+        
+    Returns:
+        dict or None: Dictionary with uniform component details if assigned:
+            - 'shako_num': int or None
+            - 'hanger_num': int or None
+            - 'garment_bag': str or None
+            - 'coat_num': int or None
+            - 'pants_num': int or None
+            - 'status': str
+            - 'notes': str or None
+        Returns None if student has no uniform assigned
+    """
+    conn, cursor = connect_db()
+    cursor.execute("""
+        SELECT shako_num, hanger_num, garment_bag, coat_num, pants_num, status, notes
+        FROM uniforms WHERE student_id=?
+    """, (student_id,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return {
+            'shako_num': result[0],
+            'hanger_num': result[1],
+            'garment_bag': result[2],
+            'coat_num': result[3],
+            'pants_num': result[4],
+            'status': result[5],
+            'notes': result[6]
+        }
+    return None
 
 def get_all_uniforms():
     """
@@ -2005,6 +2068,96 @@ def update_bag(bag_num, student_id=None, status=None, notes=None):
     conn.commit()
     conn.close()
 
+def delete_shako(shako_num):
+    """
+    Permanently remove a shako from the database.
+    
+    This function deletes the shako record entirely. Use with caution
+    as this operation cannot be undone.
+    
+    Args:
+        shako_num (int): The shako number to delete
+        
+    Note:
+        Only unassigned shakos should be deleted to maintain data integrity.
+    """
+    conn, cursor = connect_db()
+    cursor.execute("DELETE FROM shakos WHERE shako_num = ?", (shako_num,))
+    conn.commit()
+    conn.close()
+
+def delete_coat(coat_num):
+    """
+    Permanently remove a coat from the database.
+    
+    This function deletes the coat record entirely. Use with caution
+    as this operation cannot be undone.
+    
+    Args:
+        coat_num (str): The coat number to delete
+        
+    Note:
+        Only unassigned coats should be deleted to maintain data integrity.
+    """
+    conn, cursor = connect_db()
+    cursor.execute("DELETE FROM coats WHERE coat_num = ?", (coat_num,))
+    conn.commit()
+    conn.close()
+
+def delete_pants(pants_num):
+    """
+    Permanently remove pants from the database.
+    
+    This function deletes the pants record entirely. Use with caution
+    as this operation cannot be undone.
+    
+    Args:
+        pants_num (str): The pants number to delete
+        
+    Note:
+        Only unassigned pants should be deleted to maintain data integrity.
+    """
+    conn, cursor = connect_db()
+    cursor.execute("DELETE FROM pants WHERE pants_num = ?", (pants_num,))
+    conn.commit()
+    conn.close()
+
+def delete_garment_bag(bag_num):
+    """
+    Permanently remove a garment bag from the database.
+    
+    This function deletes the garment bag record entirely. Use with caution
+    as this operation cannot be undone.
+    
+    Args:
+        bag_num (str): The bag number to delete
+        
+    Note:
+        Only unassigned bags should be deleted to maintain data integrity.
+    """
+    conn, cursor = connect_db()
+    cursor.execute("DELETE FROM garment_bags WHERE bag_num = ?", (bag_num,))
+    conn.commit()
+    conn.close()
+
+def delete_instrument_by_id(inst_id):
+    """
+    Permanently remove an instrument from the database.
+    
+    This function deletes the instrument record entirely. Use with caution
+    as this operation cannot be undone.
+    
+    Args:
+        inst_id (int): The instrument ID to delete
+        
+    Note:
+        Only unassigned instruments should be deleted to maintain data integrity.
+    """
+    conn, cursor = connect_db()
+    cursor.execute("DELETE FROM instruments WHERE id = ?", (inst_id,))
+    conn.commit()
+    conn.close()
+
 def add_uniform(id, student_id, shako_num, hanger_num, garment_bag, coat_num, pants_num,
                 status=None, notes=None):
     """
@@ -2172,8 +2325,8 @@ def get_students_with_outstanding_instruments():
     conn, cursor = connect_db()
     
     cursor.execute('''
-        SELECT s.first_name, s.last_name, s.section,
-               i.instrument_name, i.instrument_serial, i.instrument_case
+        SELECT s.student_id, s.first_name, s.last_name,
+            i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         JOIN instruments i ON s.student_id = i.student_id
         WHERE i.status = 'Assigned'
@@ -2196,12 +2349,12 @@ def get_students_with_outstanding_instruments_by_section(section):
     conn, cursor = connect_db()
 
     cursor.execute('''
-        SELECT s.first_name, s.last_name, s.section,
-               i.instrument_name, i.instrument_serial, i.instrument_case
+        SELECT s.student_id, s.first_name, s.last_name,
+            i.instrument_name, i.instrument_serial, i.instrument_case
         FROM students s
         JOIN instruments i ON s.student_id = i.student_id
         WHERE i.status = 'Assigned'
-          AND s.section = ?
+        AND s.section = ?
         ORDER BY s.last_name, s.first_name, i.instrument_name
     ''', (section,))
 
@@ -2219,7 +2372,7 @@ def get_all_instruments():
 
     cursor.execute("""
         SELECT id, student_id, instrument_name, instrument_serial,
-               instrument_case, model, condition, status, notes
+            instrument_case, model, condition, status, notes
         FROM instruments
         ORDER BY 
             CASE status 
@@ -2251,9 +2404,9 @@ def find_instrument_by_serial(serial):
         
     Returns:
         tuple: A row containing (id, student_id, instrument_name, 
-               instrument_serial, instrument_case, status, notes) if found,
-               None if no matching instrument exists
-               
+                instrument_serial, instrument_case, status, notes) if found,
+                None if no matching instrument exists
+                
     Note:
         Serial numbers should be unique across all instruments. This
         function expects to find at most one matching record.
@@ -2350,7 +2503,7 @@ def update_instrument_by_id(inst_id, student_id=None, status=None, notes=None, c
 # Creates a new instrument record and assigns it to a student in one step
 # The status is automatically set to 'Assigned' since this is a checkout operation
 def assign_instrument(student_id, instrument_name, instrument_serial, instrument_case,
-                      model=None, condition=None, notes=None):
+                        model=None, condition=None, notes=None):
     """
     Create and assign a new instrument record to a student.
     
@@ -2404,6 +2557,42 @@ def assign_instrument(student_id, instrument_name, instrument_serial, instrument
     conn.commit()
     conn.close()
 
+def return_uniform_piece(student_id):
+    """
+    Return all uniform components currently assigned to a student.
+    
+    This function handles the complete uniform return process by:
+    1. Updating the main uniforms table to mark as available and clear component assignments
+    2. Updating individual component tables to set status to 'Available' and clear student assignment
+    
+    This ensures consistency between the uniforms table and component tables.
+    
+    Args:
+        student_id (str): ID of the student returning the uniform
+        
+    Effects:
+        - Uniforms table: status='Available', component fields set to NULL
+        - Component tables: status='Available', student_id=NULL for each assigned component
+    """
+    conn, cursor = connect_db()
+    
+    # Update the main uniforms table
+    cursor.execute("""
+        UPDATE uniforms 
+        SET status='Available', shako_num=NULL, hanger_num=NULL, 
+            garment_bag=NULL, coat_num=NULL, pants_num=NULL 
+        WHERE student_id=?
+    """, (student_id,))
+    
+    # Update individual component tables
+    cursor.execute("UPDATE shakos SET status='Available', student_id=NULL WHERE student_id=?", (student_id,))
+    cursor.execute("UPDATE coats SET status='Available', student_id=NULL WHERE student_id=?", (student_id,))
+    cursor.execute("UPDATE pants SET status='Available', student_id=NULL WHERE student_id=?", (student_id,))
+    cursor.execute("UPDATE garment_bags SET status='Available', student_id=NULL WHERE student_id=?", (student_id,))
+    
+    conn.commit()
+    conn.close()
+
 def return_instrument(student_id):
     """
     Mark the currently assigned instrument for a student as returned.
@@ -2412,15 +2601,15 @@ def return_instrument(student_id):
     conn, cursor = connect_db()
     cursor.execute("""
         UPDATE instruments
-           SET student_id = NULL,
-               status = 'Available'
-         WHERE student_id = ? AND status = 'Assigned'
+        SET student_id = NULL,
+            status = 'Available'
+        WHERE student_id = ? AND status = 'Assigned'
     """, (student_id,))
     conn.commit()
     conn.close()
 
 def add_instrument(id, student_id, instrument_name, instrument_serial, instrument_case,
-                   model=None, condition=None, status=None, notes=None):
+        model=None, condition=None, status=None, notes=None):
     """
     Manually insert an instrument record with a specific ID.
     
@@ -2553,12 +2742,12 @@ def add_or_update_instrument(
         if existing:
             cursor.execute(
                 """
-                UPDATE instruments
-                   SET student_id=?,
-                       instrument_name=?, instrument_serial=?,
-                       instrument_case=?, model=?, condition=?,
-                       status=?, notes=?
-                 WHERE id=?
+                    UPDATE instruments
+                    SET student_id=?,
+                        instrument_name=?, instrument_serial=?,
+                        instrument_case=?, model=?, condition=?,
+                        status=?, notes=?
+                    WHERE id=?
                 """,
                 (
                     preserved_student,

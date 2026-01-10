@@ -134,8 +134,8 @@ class AddUniformDialog(QDialog):
         # --- Shako Number ---
         shako_layout = QHBoxLayout()
         shako_label = QLabel("Shako Number:")
-        self.shako_input = QSpinBox()
-        self.shako_input.setRange(0, 9999)
+        self.shako_input = QLineEdit()
+        self.shako_input.setPlaceholderText("Shako Number")
         shako_layout.addWidget(shako_label)
         shako_layout.addWidget(self.shako_input)
         layout.addLayout(shako_layout)
@@ -143,8 +143,8 @@ class AddUniformDialog(QDialog):
         # --- Hanger Number ---
         hanger_layout = QHBoxLayout()
         hanger_label = QLabel("Hanger Number:")
-        self.hanger_input = QSpinBox()
-        self.hanger_input.setRange(0, 9999)
+        self.hanger_input = QLineEdit()
+        self.hanger_input.setPlaceholderText("Hanger Number")
         hanger_layout.addWidget(hanger_label)
         hanger_layout.addWidget(self.hanger_input)
         layout.addLayout(hanger_layout)
@@ -318,29 +318,29 @@ class AddUniformDialog(QDialog):
             This method ensures database-compatible data format
             while handling differences between add and find modes
         """
-        shako = self.shako_input.value()
-        coat = self.coat_input.value()
-        pants = self.pants_input.value()
+        shako = self.shako_input.text().strip()
+        coat = self.coat_input.text().strip()
+        pants = self.pants_input.text().strip()
         bag = self.bag_input.text().strip()
 
         if self.find_mode:
             return {
-                'shako_num': None if shako == 0 else shako,
-                'coat_num': None if coat == 0 else coat,
-                'pants_num': None if pants == 0 else pants,
-                'garment_bag': None if not bag else bag
+                'shako_num': int(shako) if shako else None,
+                'coat_num': int(coat) if coat else None,
+                'pants_num': int(pants) if pants else None,
+                'garment_bag': bag if bag else None
             }
 
         # Only access hanger_input and notes_input in add mode
-        hanger = self.hanger_input.value()
+        hanger = self.hanger_input.text().strip()
         notes = self.notes_input.text().strip()
 
         return {
-            'shako_num': None if shako == 0 else shako,
-            'hanger_num': None if hanger == 0 else hanger,
+            'shako_num': int(shako) if shako else None,
+            'hanger_num': int(hanger) if hanger else None,
             'garment_bag': None if not bag else bag,
-            'coat_num': None if coat == 0 else coat,
-            'pants_num': None if pants == 0 else pants,
+            'coat_num': int(coat) if coat else None,
+            'pants_num': int(pants) if pants else None,
             'status': 'Available',
             'notes': None if not notes else notes
         }

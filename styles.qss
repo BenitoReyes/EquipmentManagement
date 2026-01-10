@@ -119,7 +119,6 @@ QToolButton {
     padding: 10px;                   /* Adequate touch target */
     font-weight: bold;               /* Enhanced visibility for toolbar items */
     font-size: 14px;                 /* Balanced with icon size */
-    qproperty-iconAlignment: AlignCenter; /* Optimal icon positioning */
 }
 
 /* Tool Button Menu Indicator

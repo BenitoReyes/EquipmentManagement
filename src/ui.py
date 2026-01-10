@@ -161,7 +161,7 @@ class EquipmentManagementUI(QWidget):
         """
         super().__init__()
         self.setWindowTitle("Equipment Management")
-        self.setGeometry(200, 200, 900, 700)
+        self.setGeometry(200, 200, 1200, 700)
         self.setStyleSheet(load_stylesheet())
 
         # Valid sections including Flags
@@ -199,6 +199,7 @@ class EquipmentManagementUI(QWidget):
         equipment_menu.addAction("Find Uniform", self.find_uniform_popup)
         equipment_menu.addAction("Assign Uniform", self.assign_uniform_popup)
         equipment_menu.addAction("Return Uniform", self.return_uniform_popup)
+        equipment_menu.addAction("Delete Uniform", self.delete_uniform)
         equipment_menu.addAction("View Outstanding Uniforms", self.show_outstanding_uniforms)
         equipment_menu.addAction("View Uniform Table", self.show_uniform_table_screen)
         equipment_menu.addSeparator()
@@ -207,6 +208,7 @@ class EquipmentManagementUI(QWidget):
         equipment_menu.addAction("Find Instrument", self.find_instrument_popup)
         equipment_menu.addAction("Assign Instrument", self.assign_instrument_popup)
         equipment_menu.addAction("Return Instrument", self.return_instrument_popup)
+        equipment_menu.addAction("Delete Instrument", self.delete_instrument)
         equipment_menu.addAction("View Outstanding Instruments", self.show_outstanding_instruments)
         equipment_menu.addAction("View All Instruments", self.view_all_instruments_table)
         equipment_ops = QToolButton()
@@ -286,23 +288,33 @@ class EquipmentManagementUI(QWidget):
             self.delete_all_uniforms()
         elif clicked == btn_instruments:
             self.delete_all_instruments()
-        elif clicked == btn_cancel:
-            self.close()
+        # For cancel, do nothing - just close the dialog
 
     def show_about_dialog(self):
         """
         Display the application's about dialog with author and license information.
         
-        Shows a message box containing:
+        Shows a resizable dialog containing:
         - Author information
         - Organization affiliation
         - Repository/license location
         """
-        QMessageBox.information(
-            self, "About This App",
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About This App")
+        dlg.setMinimumSize(400, 200)
+        v = QVBoxLayout()
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setPlainText(
             "Made by: Benito Reyes\nFall '21 Trumpet \nKKPSI DI,, SPR '24 Ace\n"
             "License and code can be found at: https://github.com/BenitoReyes/EquipmentManagement"
         )
+        v.addWidget(text_edit)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        v.addWidget(close_btn)
+        dlg.setLayout(v)
+        dlg.exec()
 
     def sanitize(self, value):
         """
@@ -449,7 +461,15 @@ class EquipmentManagementUI(QWidget):
         """
         self.active_table = "students"
 
-        rows, headers = db.get_students_with_uniforms_and_instruments()
+        if self.active_table == "students":
+            rows = db.get_students()
+            headers = [
+                "Student ID", "First Name", "Last Name", "Phone", "Email",
+                "Year Joined", "Status", "Guardian Name", "Guardian Phone",
+                "Section", "Glove Size", "Spat Size"
+            ]
+        else:
+            rows, headers = db.get_students_with_uniforms_and_instruments()
 
         self.student_table.setSortingEnabled(False)  # Disable sorting during population
         self.student_table.clearContents()
@@ -909,7 +929,7 @@ class EquipmentManagementUI(QWidget):
                 self.student_table.setItem(r, c, QTableWidgetItem(text))
         self.student_table.setSortingEnabled(True)
         self.student_table.sortItems(7)
-        self.student_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.student_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.student_table.verticalHeader().setVisible(False)
 
     # --------------------------------------------------------------------------
@@ -1401,6 +1421,175 @@ class EquipmentManagementUI(QWidget):
         QMessageBox.information(self, "Deleted", "All data cleared.")
         self.refresh_if_active(self.active_table)
 
+    def delete_uniform(self):
+        """
+        Handle the deletion of multiple uniform components at once.
+        
+        This method allows administrators to remove multiple uniform pieces
+        from inventory in a single operation, similar to the addition process.
+        Only filled fields will be processed, and only unassigned components
+        can be deleted.
+        
+        Process:
+        1. Present dialog with all uniform component fields
+        2. User fills in numbers for components to delete
+        3. Validate each filled component exists and is unassigned
+        4. Confirm deletion for all valid components
+        5. Execute deletions
+        
+        Supported Components:
+        - Shako: Marching band hat
+        - Coat: Uniform jacket
+        - Pants: Uniform trousers
+        - Garment Bag: Storage bag
+        
+        Validation:
+        - Components must exist in inventory
+        - Components must not be assigned to students
+        - Empty fields are ignored
+        
+        Error Handling:
+        - Non-existent components
+        - Assigned components (prevents deletion)
+        - Mixed valid/invalid selections
+        
+        Note:
+            This permanently removes components from the database.
+            Use with caution as deletions cannot be undone.
+        """
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Delete Uniform Components")
+        v = QVBoxLayout()
+        
+        v.addWidget(QLabel("Enter component numbers to delete (leave blank to skip):"))
+        
+        shako_in = QLineEdit()
+        shako_in.setPlaceholderText("Shako number")
+        v.addWidget(QLabel("Shako Number:"))
+        v.addWidget(shako_in)
+        
+        coat_in = QLineEdit()
+        coat_in.setPlaceholderText("Coat number")
+        v.addWidget(QLabel("Coat Number:"))
+        v.addWidget(coat_in)
+        
+        pants_in = QLineEdit()
+        pants_in.setPlaceholderText("Pants number")
+        v.addWidget(QLabel("Pants Number:"))
+        v.addWidget(pants_in)
+        
+        bag_in = QLineEdit()
+        bag_in.setPlaceholderText("Garment bag identifier")
+        v.addWidget(QLabel("Garment Bag:"))
+        v.addWidget(bag_in)
+        
+        h = QHBoxLayout()
+        delete_btn = QPushButton("Delete Selected")
+        cancel_btn = QPushButton("Cancel")
+        h.addWidget(delete_btn)
+        h.addWidget(cancel_btn)
+        v.addLayout(h)
+        dlg.setLayout(v)
+        
+        def do_delete():
+            components_to_delete = []
+            errors = []
+            
+            # Check shako
+            shako_num = shako_in.text().strip()
+            if shako_num:
+                try:
+                    shako_num = int(shako_num)
+                    data = db.find_shako_by_number(shako_num)
+                    if not data:
+                        errors.append(f"Shako {shako_num} not found")
+                    elif data[3] == 'Assigned' or data[4] is not None:
+                        errors.append(f"Shako {shako_num} is assigned")
+                    else:
+                        components_to_delete.append(('Shako', shako_num))
+                except ValueError:
+                    errors.append(f"Invalid shako number: {shako_num}")
+            
+            # Check coat
+            coat_num = coat_in.text().strip()
+            if coat_num:
+                try:
+                    coat_num = int(coat_num)
+                    data = db.find_coat_by_number(coat_num)
+                    if not data:
+                        errors.append(f"Coat {coat_num} not found")
+                    elif data[3] == 'Assigned' or data[4] is not None:
+                        errors.append(f"Coat {coat_num} is assigned")
+                    else:
+                        components_to_delete.append(('Coat', coat_num))
+                except ValueError:
+                    errors.append(f"Invalid coat number: {coat_num}")
+            
+            # Check pants
+            pants_num = pants_in.text().strip()
+            if pants_num:
+                try:
+                    pants_num = int(pants_num)
+                    data = db.find_pants_by_number(pants_num)
+                    if not data:
+                        errors.append(f"Pants {pants_num} not found")
+                    elif data[3] == 'Assigned' or data[4] is not None:
+                        errors.append(f"Pants {pants_num} is assigned")
+                    else:
+                        components_to_delete.append(('Pants', pants_num))
+                except ValueError:
+                    errors.append(f"Invalid pants number: {pants_num}")
+            
+            # Check bag
+            bag_num = bag_in.text().strip()
+            if bag_num:
+                data = db.find_bag_by_number(bag_num)
+                if not data:
+                    errors.append(f"Garment bag {bag_num} not found")
+                elif data[3] == 'Assigned' or data[4] is not None:
+                    errors.append(f"Garment bag {bag_num} is assigned")
+                else:
+                    components_to_delete.append(('Garment Bag', bag_num))
+            
+            if errors:
+                QMessageBox.warning(self, "Errors", "\n".join(errors))
+                return
+            
+            if not components_to_delete:
+                QMessageBox.information(self, "No Selection", "No valid components selected for deletion.")
+                return
+            
+            # Confirm deletion
+            component_list = ", ".join(f"{typ} {num}" for typ, num in components_to_delete)
+            ans = QMessageBox.question(
+                self, "Confirm Deletion",
+                f"Permanently delete the following components?\n{component_list}",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if ans == QMessageBox.StandardButton.Yes:
+                deleted = []
+                for typ, num in components_to_delete:
+                    if typ == 'Shako':
+                        db.delete_shako(num)
+                        deleted.append(f"Shako {num}")
+                    elif typ == 'Coat':
+                        db.delete_coat(num)
+                        deleted.append(f"Coat {num}")
+                    elif typ == 'Pants':
+                        db.delete_pants(num)
+                        deleted.append(f"Pants {num}")
+                    elif typ == 'Garment Bag':
+                        db.delete_garment_bag(num)
+                        deleted.append(f"Bag {num}")
+                
+                QMessageBox.information(self, "Deleted", f"Deleted: {', '.join(deleted)}")
+                dlg.accept()
+                self.refresh_if_active(self.active_table)
+        
+        delete_btn.clicked.connect(do_delete)
+        cancel_btn.clicked.connect(dlg.reject)
+        dlg.exec()
+
     def import_students_from_csv(self):
         """
         Import student records from a CSV file with format detection.
@@ -1473,9 +1662,13 @@ class EquipmentManagementUI(QWidget):
 
                     inserted = db.add_or_update_student(
                         sid, parts[1], parts[2], parts[6], parts[9],
-                        parts[3], parts[4], parts[7], parts[8], parts[5],
-                        parts[10], parts[11]
+                        parts[3], parts[4], parts[7], parts[8], parts[5]
                     )
+                    # Update glove and spat sizes if provided
+                    if len(parts) >= 11 and parts[10]:
+                        db.update_student(sid, "glove_size", parts[10])
+                    if len(parts) >= 12 and parts[11]:
+                        db.update_student(sid, "spat_size", parts[11])
                     if inserted:
                         count_added += 1
                     else:
@@ -1514,10 +1707,13 @@ class EquipmentManagementUI(QWidget):
                         student_data['email'],
                         student_data['guardian_name'],
                         student_data['guardian_phone'],
-                        student_data['year_came_up'],
-                        student_data['glove_size'],
-                        student_data['spat_size']
+                        student_data['year_came_up']
                     )
+                    # Update glove and spat sizes if provided
+                    if student_data['glove_size']:
+                        db.update_student(sid, "glove_size", student_data['glove_size'])
+                    if student_data['spat_size']:
+                        db.update_student(sid, "spat_size", student_data['spat_size'])
                     if inserted:
                         count_added += 1
                     else:
@@ -2539,18 +2735,63 @@ class EquipmentManagementUI(QWidget):
             self, "Outstanding Uniforms",
             "Filter by section:", opts, 0, False
         )
-        if ok and section != "<All>":
+        if not ok:
+            return  # User canceled, do not fetch report
+        if section != "<All>":
             rows = db.get_students_with_outstanding_uniforms_by_section(section)
         else:
             rows = db.get_students_with_outstanding_uniforms()
         if not rows:
             QMessageBox.information(self, "Info", "All uniforms are accounted for.")
             return
-        msg = "\n".join(
-            f"{r[0]} {r[1]}: Shako {r[2]}, Hanger {r[3]}, Bag {r[4]}, Coat {r[5]}, Pants {r[6]}"
-            for r in rows
-        )
-        self.show_printable_results("Outstanding Uniforms", msg)
+        
+        # Display in a table dialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Outstanding Uniforms")
+        v = QVBoxLayout()
+        
+        table = QTableWidget()
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels(["Student ID", "First Name", "Last Name", "Shako", "Hanger", "Bag", "Coat", "Pants"])
+        table.setRowCount(len(rows))
+        
+        for r, row in enumerate(rows):
+            for c, val in enumerate(row):
+                table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
+        
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        v.addWidget(table)
+        
+        h = QHBoxLayout()
+        print_btn = QPushButton("Print")
+        close_btn = QPushButton("Close")
+        h.addWidget(print_btn)
+        h.addWidget(close_btn)
+        v.addLayout(h)
+        
+        def do_print():
+            # Format as tab-separated for Excel-like import
+            headers = "Student ID\tFirst Name\tLast Name\tShako\tHanger\tBag\tCoat\tPants"
+            msg = headers + "\n" + "\n".join(
+                "\t".join(str(val) if val is not None else "" for val in row)
+                for row in rows
+            )
+            
+            # Directly print the text using QTextDocument
+            from PyQt6.QtGui import QTextDocument
+            from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+            
+            doc = QTextDocument()
+            doc.setPlainText(msg)
+            printer = QPrinter()
+            dialog = QPrintDialog(printer, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                doc.print(printer)
+        
+        print_btn.clicked.connect(do_print)
+        close_btn.clicked.connect(dlg.accept)
+        dlg.setLayout(v)
+        dlg.exec()
 
     def delete_all_uniforms(self):
         """
@@ -2569,8 +2810,9 @@ class EquipmentManagementUI(QWidget):
         - All Garment Bags
         
         Safety Features:
-        - Confirmation dialog
-        - Explicit warning
+        - Double confirmation requirement
+        - Explicit text verification
+        - Clear warning messages
         - Irreversibility notice
         
         Database Operations:
@@ -2588,13 +2830,72 @@ class EquipmentManagementUI(QWidget):
             Use with extreme caution.
         """
         from PyQt6.QtWidgets import QMessageBox
-        reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete ALL uniforms? This cannot be undone.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            db.delete_all_shakos()
-            db.delete_all_coats()
-            db.delete_all_pants()
-            db.delete_all_garment_bags()
-            self.refresh_if_active(self.active_table)
+        ans = QMessageBox.question(
+            self, "Delete ALL Uniforms",
+            "This will remove ALL uniforms. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+
+        txt, ok = QInputDialog.getText(
+            self, "Final Confirmation", 'Type DELETE ALL to confirm:'
+        )
+        if not ok or txt.strip() != "DELETE ALL":
+            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
+            return
+
+        db.delete_all_shakos()
+        db.delete_all_coats()
+        db.delete_all_pants()
+        db.delete_all_garment_bags()
+        QMessageBox.information(self, "Deleted", "All uniforms cleared.")
+        self.refresh_if_active(self.active_table)
+
+    def delete_all_instruments(self):
+        """
+        Execute a complete purge of all instrument records from the database.
+        
+        This high-risk operation implements multiple safety measures:
+        1. Initial confirmation dialog
+        2. Text verification requirement
+        3. Final confirmation step
+        
+        Security Features:
+        - Double confirmation requirement
+        - Explicit text verification
+        - Clear warning messages
+        - Cancellation options
+        
+        Process Flow:
+        1. Display initial warning dialog
+        2. Request explicit "DELETE ALL" text entry
+        3. Verify text matches exactly
+        4. Execute deletion if confirmed
+        5. Update views and provide feedback
+        
+        Note:
+            This is a critical administrative function that
+            irreversibly removes all instrument data. Use with
+            extreme caution and only when necessary.
+        """
+        ans = QMessageBox.question(
+            self, "Delete ALL Instruments",
+            "This will remove ALL instruments. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+
+        txt, ok = QInputDialog.getText(
+            self, "Final Confirmation", 'Type DELETE ALL to confirm:'
+        )
+        if not ok or txt.strip() != "DELETE ALL":
+            QMessageBox.information(self, "Cancelled", "Operation cancelled.")
+            return
+        db.delete_all_instruments()
+        QMessageBox.information(self, "Deleted", "All instruments cleared.")
+        self.refresh_if_active(self.active_table)
 
     # --------------------------------------------------------------------------
     # Instrument methods
@@ -3115,9 +3416,11 @@ class EquipmentManagementUI(QWidget):
             0,
             False
         )
+        if not ok:
+            return  # User canceled, do not fetch report
 
         # Fetch instrument records based on filter
-        if ok and section != "<All>":
+        if section != "<All>":
             # Filter by student section
             rows = db.get_students_with_outstanding_instruments_by_section(section)
         else:
@@ -3129,17 +3432,109 @@ class EquipmentManagementUI(QWidget):
             QMessageBox.information(self, "Info", "All instruments are accounted for.")
             return
 
-        # Format results into a printable string
-        msg = "\n".join(
-            f"{r[0]} {r[1]}: {r[3]} | Serial: {r[4]} | Case: {r[5]}"  # name, instrument, serial, case
-            for r in rows
+        # Display in a table dialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Outstanding Instruments")
+        v = QVBoxLayout()
+        
+        table = QTableWidget()
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["Student ID", "First Name", "Last Name", "Instrument", "Serial", "Case"])
+        table.setRowCount(len(rows))
+        
+        for r, row in enumerate(rows):
+            for c, val in enumerate(row):
+                table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
+        
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        v.addWidget(table)
+        
+        h = QHBoxLayout()
+        print_btn = QPushButton("Print")
+        close_btn = QPushButton("Close")
+        h.addWidget(print_btn)
+        h.addWidget(close_btn)
+        v.addLayout(h)
+        
+        def do_print():
+            # Format results as tab-separated for Excel-like import
+            headers = "Student ID\tFirst Name\tLast Name\tInstrument\tSerial\tCase"
+            msg = headers + "\n" + "\n".join(
+                "\t".join(str(val) if val is not None else "" for val in row)
+                for row in rows
+            )
+
+            # Directly print the text using QTextDocument
+            from PyQt6.QtGui import QTextDocument
+            from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+            
+            doc = QTextDocument()
+            doc.setPlainText(msg)
+            printer = QPrinter()
+            dialog = QPrintDialog(printer, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                doc.print(printer)
+        
+        print_btn.clicked.connect(do_print)
+        close_btn.clicked.connect(dlg.accept)
+        dlg.setLayout(v)
+        dlg.exec()
+
+    def delete_instrument(self):
+        """
+        Handle the deletion of a specific instrument.
+        
+        This method allows administrators to remove an instrument from inventory.
+        Only unassigned instruments can be deleted.
+        
+        Process:
+        1. Prompt for instrument serial number
+        2. Validate instrument exists and is unassigned
+        3. Confirm deletion
+        4. Execute removal
+        
+        Validation:
+        - Serial number must exist
+        - Instrument must not be assigned to a student
+        
+        Error Handling:
+        - Non-existent serial
+        - Assigned instruments (prevents deletion)
+        
+        Note:
+            This permanently removes the instrument from the database.
+            Use with caution as deletions cannot be undone.
+        """
+        serial, ok = QInputDialog.getText(self, "Delete Instrument", "Enter instrument serial number:")
+        if not ok or not serial.strip():
+            return
+        serial = serial.strip()
+        
+        # Find the instrument
+        data = db.find_instrument_by_serial(serial)
+        if not data:
+            QMessageBox.warning(self, "Error", "Instrument not found.")
+            return
+        
+        # Check if assigned
+        if data[5] == 'Assigned':  # status is at index 5? Wait, let's check the return from find_instrument_by_serial
+            # From db.py: return (id, student_id, name, serial, case, status, model, condition, notes)
+            # So index 5 is status
+            QMessageBox.warning(self, "Error", "Cannot delete assigned instrument.")
+            return
+        
+        # Confirm deletion
+        confirm_msg = f"Delete instrument {data[2]} (Serial: {serial})?"  # name at index 2
+        
+        ans = QMessageBox.question(
+            self, "Confirm Delete",
+            confirm_msg,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-
-
-        # Display results in a scrollable, printable dialog
-        self.show_printable_results("Outstanding Instruments", msg)
-
-    def delete_all_instruments(self):
+        if ans == QMessageBox.StandardButton.Yes:
+            db.delete_instrument_by_id(data[0])  # id at index 0
+            QMessageBox.information(self, "Deleted", f"Instrument {data[2]} deleted.")
+            self.refresh_if_active(self.active_table)
         """
         Remove all instruments from the inventory system.
         

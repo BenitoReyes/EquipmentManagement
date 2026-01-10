@@ -104,8 +104,9 @@ class EditStudentDialog(QDialog):
 
         # Preserve student identifier for database operations
         # student_data follows database schema structure:
-        # 0: ID, 1: First Name, 2: Last Name, 3: Phone, 4: Email,
-        # 5: Year Joined, 6: Status, 7: Guardian Name, 8: Guardian Phone, 9: Section
+        # 0: ID, 1: First Name, 2: Last Name, 3: Status, 4: Phone, 5: Email,
+        # 6: Guardian Name, 7: Guardian Phone, 8: Year Joined, 9: Section,
+        # 10: Glove Size, 11: Spat Size
         self.student_id = student_data[0]
 
         # Create a form layout to organize fields vertically
@@ -129,7 +130,9 @@ class EditStudentDialog(QDialog):
                 "Trumpet", "Trombone", "Euphonium", "French Horn", "Tuba",
                 "Flute", "Clarinet", "Saxophone", "Bassoon", "Oboe", "Percussion",
                 "Flags"
-            ])
+            ]),
+            ("Glove Size",      10, "combo", ["", "XS", "S", "M", "L", "XL"]),
+            ("Spat Size",       11, "combo", ["", "XS", "S", "M", "L", "XL"])
         ]
 
 
@@ -234,7 +237,9 @@ class EditStudentDialog(QDialog):
             "Status":         "status",
             "Guardian Name":  "guardian_name",
             "Guardian Phone": "guardian_phone",
-            "Section":        "section"
+            "Section":        "section",
+            "Glove Size":     "glove_size",
+            "Spat Size":      "spat_size"
         }
 
         # --- Update each field in the database ---
