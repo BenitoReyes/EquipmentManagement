@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtWidgets import QHeaderView
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QIcon, QFontMetrics, QBrush, QColor
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
+from PyQt6.QtPrintSupport import QPrintDialog, QPrinter, QPrinterInfo
 import qrcode
 import barcode
 from barcode.writer import ImageWriter
@@ -382,9 +382,43 @@ class EquipmentManagementUI(QWidget):
         def do_print():
             doc = te.document()
             printer = QPrinter()
-            pd = QPrintDialog(printer, dlg)
-            if pd.exec():
+            try:
+                default_printer = QPrinterInfo.defaultPrinter()
+                if not default_printer.isNull():
+                    printer.setPrinterName(default_printer.printerName())
+            except Exception:
+                pass
+
+            # If no native printers are available, offer a PDF fallback.
+            if not QPrinterInfo.availablePrinters():
+                answer = QMessageBox.question(
+                    dlg,
+                    "No Printers Found",
+                    "No printers were detected. Save output as a PDF instead?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+
+                filename, _ = QFileDialog.getSaveFileName(dlg, "Save as PDF", "", "PDF Files (*.pdf)")
+                if not filename:
+                    return
+                if not filename.lower().endswith(".pdf"):
+                    filename += ".pdf"
+
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(filename)
                 doc.print(printer)
+                QMessageBox.information(dlg, "Saved", f"Saved PDF to {filename}")
+                return
+
+            try:
+                pd = QPrintDialog(printer, self)
+                if pd.exec() == QDialog.DialogCode.Accepted:
+                    doc.print(printer)
+            except Exception as e:
+                QMessageBox.warning(dlg, "Print Error", f"Unable to show the print dialog:\n{e}")
 
         print_btn.clicked.connect(do_print)
         close_btn.clicked.connect(dlg.accept)
@@ -576,18 +610,29 @@ class EquipmentManagementUI(QWidget):
             and provides a comprehensive view of all uniform components
         """
         self.active_table = "uniforms"
+        # The database includes an internal record ID, but we hide it from the UI.
         headers = [
-            "Record ID", "Student ID", "Shako #", "Hanger #",
+            "Student ID", "Shako #", "Hanger #",
             "Garment Bag", "Coat #", "Pants #", "Status", "Notes"
         ]
-        self.student_table.setColumnCount(len(headers))
+        expected_len = len(headers)
+        self.student_table.setColumnCount(expected_len)
         self.student_table.setHorizontalHeaderLabels(headers)
         self.student_table.setRowCount(0)
 
         rows = db.get_all_uniforms()
         for r, u in enumerate(rows):
             self.student_table.insertRow(r)
-            for c, val in enumerate(u):
+            vals = list(u)
+            if len(vals) == expected_len + 1:
+                vals = vals[1:]
+            if len(vals) < expected_len:
+                vals += [None] * (expected_len - len(vals))
+            elif len(vals) > expected_len:
+                # If the row has more fields than expected, trim the extras.
+                vals = vals[:expected_len]
+
+            for c, val in enumerate(vals):
                 text = "" if val is None else str(val)
                 self.student_table.setItem(r, c, QTableWidgetItem(text))
 
@@ -641,13 +686,17 @@ class EquipmentManagementUI(QWidget):
         shako_group.setChecked(True)
         shako_layout = QVBoxLayout()
         shako_table = QTableWidget()
-        shako_headers = ["ID", "Shako #", "Status", "Student ID", "Notes"]
+        shako_headers = [ "Shako #", "Status", "Student ID", "Notes"]
         shako_table.setColumnCount(len(shako_headers))
         shako_table.setHorizontalHeaderLabels(shako_headers)
         shakos = db.get_all_shakos()
         shako_table.setRowCount(len(shakos))
         for r, row in enumerate(shakos):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(shako_headers):
+                data = data[1:]
+            for c in range(len(shako_headers)):
+                val = data[c] if c < len(data) else None
                 shako_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         shako_table.resizeColumnsToContents()
         shako_layout.addWidget(shako_table)
@@ -660,13 +709,17 @@ class EquipmentManagementUI(QWidget):
         coat_group.setChecked(True)
         coat_layout = QVBoxLayout()
         coat_table = QTableWidget()
-        coat_headers = ["ID", "Coat #", "Status", "Student ID", "Notes"]
+        coat_headers = [ "Coat #", "Status", "Student ID", "Notes"]
         coat_table.setColumnCount(len(coat_headers))
         coat_table.setHorizontalHeaderLabels(coat_headers)
         coats = db.get_all_coats()
         coat_table.setRowCount(len(coats))
         for r, row in enumerate(coats):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(coat_headers):
+                data = data[1:]
+            for c in range(len(coat_headers)):
+                val = data[c] if c < len(data) else None
                 coat_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         coat_table.resizeColumnsToContents()
         coat_layout.addWidget(coat_table)
@@ -679,13 +732,17 @@ class EquipmentManagementUI(QWidget):
         pants_group.setChecked(True)
         pants_layout = QVBoxLayout()
         pants_table = QTableWidget()
-        pants_headers = ["ID", "Pants #", "Status", "Student ID", "Notes"]
+        pants_headers = [ "Pants #", "Status", "Student ID", "Notes"]
         pants_table.setColumnCount(len(pants_headers))
         pants_table.setHorizontalHeaderLabels(pants_headers)
         pants = db.get_all_pants()
         pants_table.setRowCount(len(pants))
         for r, row in enumerate(pants):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(pants_headers):
+                data = data[1:]
+            for c in range(len(pants_headers)):
+                val = data[c] if c < len(data) else None
                 pants_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         pants_table.resizeColumnsToContents()
         pants_layout.addWidget(pants_table)
@@ -698,13 +755,17 @@ class EquipmentManagementUI(QWidget):
         bag_group.setChecked(True)
         bag_layout = QVBoxLayout()
         bag_table = QTableWidget()
-        bag_headers = ["ID", "Bag #", "Status", "Student ID", "Notes"]
+        bag_headers = [ "Bag #", "Status", "Student ID", "Notes"]
         bag_table.setColumnCount(len(bag_headers))
         bag_table.setHorizontalHeaderLabels(bag_headers)
         bags = db.get_all_garment_bags()
         bag_table.setRowCount(len(bags))
         for r, row in enumerate(bags):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(bag_headers):
+                data = data[1:]
+            for c in range(len(bag_headers)):
+                val = data[c] if c < len(data) else None
                 bag_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         bag_table.resizeColumnsToContents()
         bag_layout.addWidget(bag_table)
@@ -771,14 +832,18 @@ class EquipmentManagementUI(QWidget):
         shako_group.setChecked(True)
         shako_layout = QVBoxLayout()
         shako_table = QTableWidget()
-        shako_headers = ["ID", "Shako #", "Status", "Student ID", "Notes"]
+        shako_headers = [ "Shako #", "Status", "Student ID", "Notes"]
         shako_table.setColumnCount(len(shako_headers))
         shako_table.setHorizontalHeaderLabels(shako_headers)
         shakos = db.get_all_shakos()
         shako_table.setRowCount(len(shakos))
         shako_table.setVerticalHeaderLabels(["" for _ in range(len(shakos))])
         for r, row in enumerate(shakos):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(shako_headers):
+                data = data[1:]
+            for c in range(len(shako_headers)):
+                val = data[c] if c < len(data) else None
                 shako_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         shako_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         shako_table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
@@ -793,7 +858,7 @@ class EquipmentManagementUI(QWidget):
         coat_group.setChecked(True)
         coat_layout = QVBoxLayout()
         coat_table = QTableWidget()
-        coat_headers = ["ID", "Coat #", "Hanger #", "Status", "Student ID", "Notes"]
+        coat_headers = [ "Coat #", "Hanger #", "Status", "Student ID", "Notes"]
         coat_table.setColumnCount(len(coat_headers))
         coat_table.setHorizontalHeaderLabels(coat_headers)
         coats = db.get_all_coats()
@@ -816,14 +881,18 @@ class EquipmentManagementUI(QWidget):
         pants_group.setChecked(True)
         pants_layout = QVBoxLayout()
         pants_table = QTableWidget()
-        pants_headers = ["ID", "Pants #", "Status", "Student ID", "Notes"]
+        pants_headers = [ "Pants #", "Status", "Student ID", "Notes"]
         pants_table.setColumnCount(len(pants_headers))
         pants_table.setHorizontalHeaderLabels(pants_headers)
         pants = db.get_all_pants()
         pants_table.setRowCount(len(pants))
         pants_table.setVerticalHeaderLabels(["" for _ in range(len(pants))])
         for r, row in enumerate(pants):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(pants_headers):
+                data = data[1:]
+            for c in range(len(pants_headers)):
+                val = data[c] if c < len(data) else None
                 pants_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         pants_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         pants_table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
@@ -838,14 +907,18 @@ class EquipmentManagementUI(QWidget):
         bag_group.setChecked(True)
         bag_layout = QVBoxLayout()
         bag_table = QTableWidget()
-        bag_headers = ["ID", "Bag #", "Status", "Student ID", "Notes"]
+        bag_headers = [ "Bag #", "Status", "Student ID", "Notes"]
         bag_table.setColumnCount(len(bag_headers))
         bag_table.setHorizontalHeaderLabels(bag_headers)
         bags = db.get_all_garment_bags()
         bag_table.setRowCount(len(bags))
         bag_table.setVerticalHeaderLabels(["" for _ in range(len(bags))])
         for r, row in enumerate(bags):
-            for c, val in enumerate(row):
+            data = list(row)
+            if len(data) > len(bag_headers):
+                data = data[1:]
+            for c in range(len(bag_headers)):
+                val = data[c] if c < len(data) else None
                 bag_table.setItem(r, c, QTableWidgetItem(str(val) if val is not None else ""))
         bag_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         bag_table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
@@ -909,7 +982,7 @@ class EquipmentManagementUI(QWidget):
             self.layout.addWidget(self.student_table)
 
         headers = [
-            "ID", "Student ID", "Name", "Serial", "Case",
+            "Student ID", "Name", "Serial", "Case",
             "Model", "Condition", "Status", "Notes"
         ]
         expected_len = len(headers)
@@ -924,6 +997,11 @@ class EquipmentManagementUI(QWidget):
         self.student_table.setRowCount(len(rows))
         for r, inst in enumerate(rows):
             inst = list(inst)
+            # Most queries return (id, student_id, name, serial, ...).
+            # We intentionally drop the internal ID column so it doesn't show in the UI.
+            if len(inst) == expected_len + 1:
+                inst = inst[1:]
+
             if len(inst) < expected_len:
                 inst += [None] * (expected_len - len(inst))
             elif len(inst) > expected_len:
@@ -1830,16 +1908,61 @@ class EquipmentManagementUI(QWidget):
 
         def on_print():
             printer = QPrinter()
-            pd = QPrintDialog(printer, dlg)
-            if pd.exec():
-                painter = QPainter(printer)
-                rect = painter.viewport()
-                size = scaled.size()
-                size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
-                painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
-                painter.setWindow(scaled.rect())
-                painter.drawPixmap(0, 0, scaled)
-                painter.end()
+            try:
+                default_printer = QPrinterInfo.defaultPrinter()
+                if not default_printer.isNull():
+                    printer.setPrinterName(default_printer.printerName())
+            except Exception:
+                pass
+
+            # If no native printers are available, offer a PDF fallback.
+            if not QPrinterInfo.availablePrinters():
+                answer = QMessageBox.question(
+                    dlg,
+                    "No Printers Found",
+                    "No printers were detected. Save the code as a PDF instead?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+
+                filename, _ = QFileDialog.getSaveFileName(dlg, "Save as PDF", "", "PDF Files (*.pdf)")
+                if not filename:
+                    return
+                if not filename.lower().endswith(".pdf"):
+                    filename += ".pdf"
+
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(filename)
+
+                try:
+                    painter = QPainter(printer)
+                    rect = painter.viewport()
+                    size = scaled.size()
+                    size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
+                    painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
+                    painter.setWindow(scaled.rect())
+                    painter.drawPixmap(0, 0, scaled)
+                    painter.end()
+                    QMessageBox.information(dlg, "Saved", f"Saved PDF to {filename}")
+                except Exception as e:
+                    QMessageBox.warning(dlg, "Print Failed", f"Unable to save PDF:\n{e}")
+                return
+
+            try:
+                pd = QPrintDialog(printer, self)
+                if pd.exec() == QDialog.DialogCode.Accepted:
+                    painter = QPainter(printer)
+                    rect = painter.viewport()
+                    size = scaled.size()
+                    size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
+                    painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
+                    painter.setWindow(scaled.rect())
+                    painter.drawPixmap(0, 0, scaled)
+                    painter.end()
+            except Exception as e:
+                QMessageBox.warning(dlg, "Print Error", f"Unable to show the print dialog:\n{e}")
 
         def on_fullscreen():
             fs = QDialog(self)
@@ -2785,14 +2908,48 @@ class EquipmentManagementUI(QWidget):
             
             # Directly print the text using QTextDocument
             from PyQt6.QtGui import QTextDocument
-            from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
-            
+            from PyQt6.QtPrintSupport import QPrintDialog, QPrinter, QPrinterInfo
+
             doc = QTextDocument()
             doc.setPlainText(msg)
             printer = QPrinter()
-            dialog = QPrintDialog(printer, self)
-            if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                default_printer = QPrinterInfo.defaultPrinter()
+                if not default_printer.isNull():
+                    printer.setPrinterName(default_printer.printerName())
+            except Exception:
+                pass
+
+            # If no native printers are available, offer a PDF fallback.
+            if not QPrinterInfo.availablePrinters():
+                answer = QMessageBox.question(
+                    self,
+                    "No Printers Found",
+                    "No printers were detected. Save output as a PDF instead?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+
+                filename, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf)")
+                if not filename:
+                    return
+                if not filename.lower().endswith(".pdf"):
+                    filename += ".pdf"
+
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(filename)
                 doc.print(printer)
+                QMessageBox.information(self, "Saved", f"Saved PDF to {filename}")
+                return
+
+            try:
+                dialog = QPrintDialog(printer, self)
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    doc.print(printer)
+            except Exception as e:
+                QMessageBox.warning(self, "Print Error", f"Unable to show the print dialog:\n{e}")
         
         print_btn.clicked.connect(do_print)
         close_btn.clicked.connect(dlg.accept)
@@ -3472,14 +3629,47 @@ class EquipmentManagementUI(QWidget):
 
             # Directly print the text using QTextDocument
             from PyQt6.QtGui import QTextDocument
-            from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
-            
+
             doc = QTextDocument()
             doc.setPlainText(msg)
             printer = QPrinter()
-            dialog = QPrintDialog(printer, self)
-            if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                default_printer = QPrinterInfo.defaultPrinter()
+                if not default_printer.isNull():
+                    printer.setPrinterName(default_printer.printerName())
+            except Exception:
+                pass
+
+            # If no native printers are available, offer a PDF fallback.
+            if not QPrinterInfo.availablePrinters():
+                answer = QMessageBox.question(
+                    self,
+                    "No Printers Found",
+                    "No printers were detected. Save output as a PDF instead?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+
+                filename, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf)")
+                if not filename:
+                    return
+                if not filename.lower().endswith(".pdf"):
+                    filename += ".pdf"
+
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(filename)
                 doc.print(printer)
+                QMessageBox.information(self, "Saved", f"Saved PDF to {filename}")
+                return
+
+            try:
+                dialog = QPrintDialog(printer, self)
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    doc.print(printer)
+            except Exception as e:
+                QMessageBox.warning(self, "Print Error", f"Unable to show the print dialog:\n{e}")
         
         print_btn.clicked.connect(do_print)
         close_btn.clicked.connect(dlg.accept)

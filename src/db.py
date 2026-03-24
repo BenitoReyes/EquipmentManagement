@@ -30,6 +30,7 @@ def initialize_uniform_components():
 import sqlite3
 import sys
 import os
+import shutil
 
 def resource_path(relative_path):
     """
@@ -46,12 +47,56 @@ def resource_path(relative_path):
     # Running from source
     return os.path.join(os.path.abspath("."), relative_path)
 
-# Database path configuration
-# For development: Database in the project structure
-DB_NAME = resource_path("Database/students.db")
+def get_persistent_db_path():
+    """
+    Gets the persistent database file path appropriate for the running environment.
+    
+    Development:
+    - Uses Database/students.db relative to working directory
+    
+    PyInstaller (Packaged .exe):
+    - Uses %LOCALAPPDATA%\EquipmentManagement\students.db
+    - Creates directory if needed
+    - Copies bundled database on first run
+    
+    Returns:
+        str: Absolute path to the persistent database file
+        
+    Critical Fix:
+    - Bundled PyInstaller apps extract to read-only temp directories (sys._MEIPASS)
+    - SQLite cannot write to read-only locations, causing data loss
+    - This function ensures data is always stored in a user-writable directory
+    """
+    if hasattr(sys, '_MEIPASS'):
+        # Running from PyInstaller bundle - use user's LocalAppData
+        app_data = os.getenv('LOCALAPPDATA')
+        if not app_data:
+            # Fallback if LOCALAPPDATA not set (rare on Windows)
+            app_data = os.path.expanduser('~\\AppData\\Local')
+        
+        db_dir = os.path.join(app_data, 'EquipmentManagement')
+        db_file = os.path.join(db_dir, 'students.db')
+        
+        # Create directory if it doesn't exist
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # On first run, copy bundled database to persistent location
+        bundled_db = resource_path("Database/students.db")
+        if not os.path.exists(db_file) and os.path.exists(bundled_db):
+            try:
+                shutil.copy2(bundled_db, db_file)
+            except Exception as e:
+                print(f"Warning: Could not copy bundled database: {e}")
+        
+        return db_file
+    else:
+        # Development mode - use local Database directory
+        return resource_path("Database/students.db")
 
-# For deployment: Database alongside the executable (uncomment when packaging)
-#DB_NAME = os.path.join(os.path.dirname(sys.executable), "Database", "students.db")
+# Database path configuration - USE PERSISTENT LOCATION
+# This fix ensures data persists when running from PyInstaller executable
+DB_NAME = get_persistent_db_path()
 
 # Database Connection Management
 # Each function should use this to get a fresh connection and close it when done
@@ -65,14 +110,27 @@ def connect_db():
             - Connection object for transaction management
             - Cursor object for executing SQL commands
             
+    Configuration:
+        - Timeout: 10 seconds (prevents blocking on locked database)
+        - Isolation: DEFERRED (prevents unnecessary locks)
+        - Check same thread: Disabled (allows flexibility with connections)
+        
     Note:
         Every function should:
         1. Call this to get a fresh connection
         2. Use the cursor for queries
         3. Commit if making changes
         4. Close the connection when done
+        
+    Robustness:
+        - Timeout prevents app freezing on database locks
+        - DEFERRED isolation minimizes lock contention
+        - Proper close() calls are critical
     """
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=10.0, check_same_thread=False)
+    # DEFERRED isolation level prevents unnecessary locks
+    # Only acquires write lock when actually writing
+    conn.isolation_level = 'DEFERRED'
     cursor = conn.cursor()
     return conn, cursor
 
@@ -1089,7 +1147,7 @@ def get_all_coats():
         when working in the uniform storage area.
     """
     conn, cursor = connect_db()
-    cursor.execute("SELECT id, coat_num, hanger_num, status, student_id, notes FROM coats ORDER BY coat_num")
+    cursor.execute("SELECT coat_num, hanger_num, status, student_id, notes FROM coats ORDER BY coat_num")
     results = cursor.fetchall()
     conn.close()
     return results

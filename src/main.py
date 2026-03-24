@@ -85,6 +85,7 @@ if __name__ == "__main__":
         before the GUI system is initialized
     """
     # --- Database Schema Initialization ---
+    print(f"Database file location: {db.DB_NAME}")
     # Create core data management tables
     db.create_student_table()           # Student records (demographics, contact info)
     db.create_uniform_table()           # Uniform assignments and tracking
